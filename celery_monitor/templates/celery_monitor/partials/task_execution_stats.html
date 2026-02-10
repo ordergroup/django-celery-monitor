@@ -1,0 +1,44 @@
+{% if execution_stats %}
+<table class="task-execution-table">
+  <thead>
+    <tr>
+      <th>Task Type</th>
+      <th>Total</th>
+      <th>Success</th>
+      <th>Failure</th>
+      <th>Success Rate</th>
+      <th>Avg Runtime</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stat in execution_stats %}
+    <tr>
+      <td class="task-name">{{ stat.task_name }}</td>
+      <td class="stat-count">{{ stat.total_count }}</td>
+      <td class="stat-count success">{{ stat.success_count }}</td>
+      <td class="stat-count failure">{{ stat.failure_count }}</td>
+      <td class="success-rate">
+        {% widthratio stat.success_count stat.total_count 100 %}%
+      </td>
+      <td class="runtime">
+        {% if stat.avg_runtime %}
+          {% if stat.avg_runtime < 1 %}
+            {{ stat.avg_runtime|floatformat:2 }}s
+          {% elif stat.avg_runtime < 60 %}
+            {{ stat.avg_runtime|floatformat:1 }}s
+          {% elif stat.avg_runtime < 3600 %}
+            {% widthratio stat.avg_runtime 60 1 %}m {% widthratio stat.avg_runtime 1 1 %}s
+          {% else %}
+            {% widthratio stat.avg_runtime 3600 1 %}h
+          {% endif %}
+        {% else %}
+          <span class="no-data">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-message">No task execution data available</p>
+{% endif %}

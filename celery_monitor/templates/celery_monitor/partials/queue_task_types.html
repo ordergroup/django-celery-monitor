@@ -1,0 +1,28 @@
+{% regroup task_type_stats by queue_name as queue_groups %}
+
+{% if queue_groups %}
+<table class="task-types-table">
+  <thead>
+    <tr>
+      <th>Queue</th>
+      <th>Task Type</th>
+      <th>Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for queue in queue_groups %}
+      {% for stat in queue.list %}
+      <tr>
+        {% if forloop.first %}
+        <td class="queue-name" rowspan="{{ queue.list|length }}">{{ queue.grouper }}</td>
+        {% endif %}
+        <td class="task-name">{{ stat.task_name }}</td>
+        <td class="task-count">{{ stat.count }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-message">No pending tasks in queues</p>
+{% endif %}

@@ -34,6 +34,13 @@
 </div>
 {% endif %}
 
+{% if redis_available %}
+<div>
+  <h2 class="section-title">Task Types per Queue</h2>
+  <div hx-get="{% url 'admin:celery_monitor_redis_queue_task_types' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+</div>
+{% endif %}
+
 <h2 class="section-title">Recent Tasks (last 50)</h2>
 
 <form class="filters" method="get">
@@ -98,6 +105,9 @@
   </tbody>
 </table>
 {% endblock %}
+
+
+
 
 
 

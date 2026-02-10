@@ -129,14 +129,16 @@ name = "django-celery-monitor"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "celery" },
     { name = "django" },
     { name = "django-celery-results" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "celery", specifier = ">=5.0" },
     { name = "django", specifier = ">=5.2" },
-    { name = "django-celery-results", specifier = ">=2.6.0" },
+    { name = "django-celery-results", specifier = ">=2.0" },
 ]
 
 [[package]]

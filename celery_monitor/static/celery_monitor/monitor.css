@@ -40,6 +40,26 @@
 }
 .section-title:first-of-type { margin-top: 0; }
 
+/* ── Queue sections ───────────────────────────────────────── */
+
+.queue-section {
+  margin-bottom: 32px;
+}
+.queue-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--darkened-bg, #f5f5f5);
+  border-left: 4px solid var(--header-bg, #417690);
+  color: var(--body-fg, #333);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.queue-section .stats-grid {
+  margin-bottom: 0;
+}
+
 /* ── Stat cards ───────────────────────────────────────────── */
 
 .stats-grid {
@@ -74,6 +94,8 @@
 .stat-card.retry   { border-left: 4px solid #fd7e14; }
 .stat-card.revoked { border-left: 4px solid #6c757d; }
 .stat-card.total   { border-left: 4px solid var(--header-bg, #333); }
+.stat-card.queue   { border-left: 4px solid var(--header-bg, #417690); }
+.stat-card.task-type { border-left: 4px solid #6f42c1; }
 
 /* ── Filters ──────────────────────────────────────────────── */
 
@@ -138,6 +160,107 @@ table.task-table a:hover { text-decoration: underline; }
 .task-id-cell {
   font-family: monospace;
   font-size: 12px;
+}
+
+/* ── Task types table ─────────────────────────────────────── */
+
+table.task-types-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+table.task-types-table th, table.task-types-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, #eee);
+  text-align: left;
+  color: var(--body-fg, #333);
+}
+table.task-types-table th {
+  background: var(--darkened-bg, #f5f5f5);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+table.task-types-table tbody tr:hover {
+  background: var(--darkened-bg, #f9f9f9);
+}
+table.task-types-table .queue-name {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+  background: var(--darkened-bg, #f8f9fa);
+  border-left: 4px solid var(--header-bg, #417690);
+  vertical-align: top;
+}
+table.task-types-table .task-name {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--body-quiet-color, #666);
+}
+table.task-types-table .task-count {
+  font-weight: 600;
+  text-align: center;
+  width: 80px;
+}
+.empty-message {
+  text-align: center;
+  padding: 24px;
+  color: var(--body-quiet-color, #999);
+  margin: 0;
+}
+
+/* ── Task execution table ─────────────────────────────────── */
+
+table.task-execution-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+table.task-execution-table th, table.task-execution-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, #eee);
+  text-align: left;
+  color: var(--body-fg, #333);
+}
+table.task-execution-table th {
+  background: var(--darkened-bg, #f5f5f5);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+table.task-execution-table tbody tr:hover {
+  background: var(--darkened-bg, #f9f9f9);
+}
+table.task-execution-table .task-name {
+  font-family: monospace;
+  font-size: 12px;
+}
+table.task-execution-table .stat-count {
+  text-align: center;
+  font-weight: 600;
+  width: 80px;
+}
+table.task-execution-table .stat-count.success {
+  color: #28a745;
+}
+table.task-execution-table .stat-count.failure {
+  color: #dc3545;
+}
+table.task-execution-table .success-rate {
+  text-align: center;
+  font-weight: 600;
+  width: 100px;
+}
+table.task-execution-table .runtime {
+  text-align: center;
+  font-family: monospace;
+  font-size: 12px;
+  width: 120px;
+}
+table.task-execution-table .no-data {
+  color: var(--body-quiet-color, #999);
 }
 
 /* ── Detail grid (task detail page) ───────────────────────── */

@@ -34,7 +34,7 @@ def get_overall_status_counts() -> list[DashboardStatusCount]:
     else:
         stats = []
 
-    return [DashboardStatusCount("total", sum(i.count for i in stats))] + stats
+    return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
 
 def get_last_hour_status_counts() -> list[DashboardStatusCount]:
@@ -57,7 +57,7 @@ def get_last_hour_status_counts() -> list[DashboardStatusCount]:
     else:
         stats = []
 
-    return [DashboardStatusCount("total", sum(i.count for i in stats))] + stats
+    return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
 
 @dataclass
@@ -78,25 +78,154 @@ def get_redis_queue_stats() -> list[QueueStats]:
         broker_url = current_app.conf.broker_url
         r = redis.from_url(broker_url)
 
-        queue_names = [q.name for q in current_app.conf.task_queues or []]
+        task_queues = current_app.conf.task_queues
 
-        if not queue_names:
-            queue_names = ["celery"]
+        if isinstance(task_queues, dict):
+            queue_names = list(task_queues.keys())
+        elif task_queues:
+            queue_names = [q.name for q in task_queues]
+        else:
+            queue_names = [current_app.conf.task_default_queue or "celery"]
 
         queue_stats = []
         total_count = 0
 
         for queue_name in queue_names:
-            redis_key = (
-                f"celery:{queue_name}"
-                if not queue_name.startswith("celery:")
-                else queue_name
-            )
-            count = r.llen(redis_key)
+            count = r.llen(queue_name)
             queue_stats.append(QueueStats(queue_name=queue_name, count=count))
             total_count += count
 
-        return [QueueStats(queue_name="total", count=total_count)] + queue_stats
+        return [QueueStats(queue_name="total", count=total_count), *queue_stats]
 
     except Exception:
         return []
+
+
+@dataclass
+class QueueTaskTypeStats:
+    queue_name: str
+    task_name: str
+    count: int
+
+
+def get_redis_queue_task_types() -> list[QueueTaskTypeStats]:
+    """Get task type breakdown for all Redis queues."""
+    if not has_redis():
+        return []
+
+    try:
+        import json
+
+        import redis
+        from celery import current_app
+
+        broker_url = current_app.conf.broker_url
+        r = redis.from_url(broker_url)
+
+        task_queues = current_app.conf.task_queues
+
+        if isinstance(task_queues, dict):
+            queue_names = list(task_queues.keys())
+        elif task_queues:
+            queue_names = [q.name for q in task_queues]
+        else:
+            queue_names = [current_app.conf.task_default_queue or "celery"]
+
+        stats = []
+
+        for queue_name in queue_names:
+            task_types = {}
+
+            # Inspect messages in the queue to get task type breakdown
+            # We use LRANGE to peek at messages without removing them
+            messages = r.lrange(queue_name, 0, -1)
+            for msg in messages:
+                try:
+                    # Celery stores messages as JSON with 'task' field containing task name
+                    decoded = json.loads(msg)
+                    if "headers" in decoded and "task" in decoded["headers"]:
+                        task_name = decoded["headers"]["task"]
+                    elif "task" in decoded:
+                        task_name = decoded["task"]
+                    else:
+                        task_name = "unknown"
+
+                    task_types[task_name] = task_types.get(task_name, 0) + 1
+                except (json.JSONDecodeError, KeyError):
+                    # If we can't parse the message, skip it
+                    pass
+
+            for task_name, count in task_types.items():
+                stats.append(
+                    QueueTaskTypeStats(
+                        queue_name=queue_name, task_name=task_name, count=count
+                    )
+                )
+
+        return stats
+
+    except Exception:
+        return []
+
+
+@dataclass
+class TaskExecutionStats:
+    task_name: str
+    total_count: int
+    success_count: int
+    failure_count: int
+    avg_runtime: float | None  # Average runtime in seconds
+
+
+def get_task_execution_stats() -> list[TaskExecutionStats]:
+    """Get execution time and success/failure stats per task type."""
+    if not has_django_celery_result():
+        return []
+
+    try:
+        from django.db.models import Avg, Count, F, Q
+        from django_celery_results.models import TaskResult
+
+        # Get stats grouped by task name
+        stats = (
+            TaskResult.objects.values("task_name")
+            .annotate(
+                total_count=Count("id"),
+                success_count=Count("id", filter=Q(status="SUCCESS")),
+                failure_count=Count("id", filter=Q(status="FAILURE")),
+                avg_runtime=Avg(
+                    F("date_done") - F("date_started"),
+                    filter=Q(
+                        status="SUCCESS",
+                        date_started__isnull=False,
+                        date_done__isnull=False,
+                    ),
+                ),
+            )
+            .order_by("-total_count")
+        )
+
+        result = []
+        for stat in stats:
+            avg_seconds = None
+            if stat["avg_runtime"]:
+                avg_seconds = stat["avg_runtime"].total_seconds()
+
+            result.append(
+                TaskExecutionStats(
+                    task_name=stat["task_name"],
+                    total_count=stat["total_count"],
+                    success_count=stat["success_count"],
+                    failure_count=stat["failure_count"],
+                    avg_runtime=avg_seconds,
+                )
+            )
+
+        return result
+
+    except Exception:
+        return []
+
+
+
+

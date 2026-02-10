@@ -1,12 +1,12 @@
 from django.contrib.admin import AdminSite
-from django.http import HttpRequest
 from django.db.models import Count
+from django.http import HttpRequest
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils import timezone
-from celery_monitor import queries
-
 from django_celery_results.models import TaskResult
+
+from celery_monitor import queries
 
 
 def status_counts_overall_view(request: HttpRequest):
@@ -35,6 +35,40 @@ def redis_queue_stats_view(request: HttpRequest):
     return TemplateResponse(
         request,
         "celery_monitor/partials/queue_stats.html",
+        context,
+    )
+
+
+def redis_queue_task_types_view(request: HttpRequest):
+    task_type_stats = queries.get_redis_queue_task_types()
+    context = {"task_type_stats": task_type_stats}
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/queue_task_types.html",
+        context,
+    )
+
+
+def task_execution_stats_view(request: HttpRequest, site: AdminSite):
+    execution_stats = queries.get_task_execution_stats()
+    context = {
+        **site.each_context(request),
+        "title": "Task Execution Stats",
+        "execution_stats": execution_stats,
+    }
+    return TemplateResponse(
+        request,
+        "celery_monitor/task_execution_stats.html",
+        context,
+    )
+
+
+def task_execution_stats_partial_view(request: HttpRequest):
+    execution_stats = queries.get_task_execution_stats()
+    context = {"execution_stats": execution_stats}
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/task_execution_stats.html",
         context,
     )
 
@@ -130,6 +164,21 @@ def patch_admin_site(site):
                 name="celery_monitor_redis_queue_stats",
             ),
             path(
+                "celery-monitor/redis-queue-task-types",
+                site.admin_view(redis_queue_task_types_view),
+                name="celery_monitor_redis_queue_task_types",
+            ),
+            path(
+                "celery-monitor/task-execution-stats",
+                site.admin_view(lambda req: task_execution_stats_view(req, site)),
+                name="celery_monitor_task_execution_stats",
+            ),
+            path(
+                "celery-monitor/task-execution-stats-partial",
+                site.admin_view(task_execution_stats_partial_view),
+                name="celery_monitor_task_execution_stats_partial",
+            ),
+            path(
                 "celery-monitor/task/<str:task_id>/",
                 site.admin_view(
                     lambda req, task_id: task_detail_view(req, site, task_id)
@@ -145,24 +194,48 @@ def patch_admin_site(site):
         app_list = _orig_get_app_list(request, app_label=app_label)
         if app_label is None or app_label == "celery_monitor":
             dashboard_url = reverse(f"{site.name}:celery_monitor_dashboard")
+            execution_stats_url = reverse(
+                f"{site.name}:celery_monitor_task_execution_stats"
+            )
+
+            models = [
+                {
+                    "name": "Dashboard",
+                    "object_name": "CeleryMonitorDashboard",
+                    "admin_url": dashboard_url,
+                    "view_only": True,
+                }
+            ]
+
+            # Add execution stats if django-celery-results is installed
+            from celery_monitor.utils import has_django_celery_result
+
+            if has_django_celery_result():
+                models.append(
+                    {
+                        "name": "Task Execution Stats",
+                        "object_name": "TaskExecutionStats",
+                        "admin_url": execution_stats_url,
+                        "view_only": True,
+                    }
+                )
+
             app_list.append(
                 {
                     "name": "Celery Monitor",
                     "app_label": "celery_monitor",
                     "app_url": dashboard_url,
                     "has_module_perms": True,
-                    "models": [
-                        {
-                            "name": "Dashboard",
-                            "object_name": "CeleryMonitorDashboard",
-                            "admin_url": dashboard_url,
-                            "view_only": True,
-                        }
-                    ],
+                    "models": models,
                 }
             )
         return app_list
 
     site.get_app_list = new_get_app_list
+
+
+
+
+
 
 

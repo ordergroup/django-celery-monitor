@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrabody %}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+{% endblock %}
+
+{% block title %}Task Execution Stats{% endblock %}
+
+{% block extrastyle %}
+<link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+{% endblock %}
+
+{% block content %}
+<h1>Task Execution Stats</h1>
+
+<div hx-get="{% url 'admin:celery_monitor_task_execution_stats_partial' %}" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
+
+{% endblock %}
