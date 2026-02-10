@@ -1,0 +1,13 @@
+<div class="stats-grid">
+  {% for queue in queue_stats %}
+  <div class="stat-card {% if queue.queue_name == 'total' %}total{% else %}queue{% endif %}">
+    <span class="count">{{ queue.count }}</span>
+    <span class="label">{{ queue.queue_name|title }}</span>
+  </div>
+  {% empty %}
+  <div class="stat-card">
+    <span class="count">0</span>
+    <span class="label">No queues found</span>
+  </div>
+  {% endfor %}
+</div>

@@ -29,6 +29,16 @@ def status_counts_last_hour_view(request: HttpRequest):
     )
 
 
+def redis_queue_stats_view(request: HttpRequest):
+    queue_stats = queries.get_redis_queue_stats()
+    context = {"queue_stats": queue_stats}
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/queue_stats.html",
+        context,
+    )
+
+
 def dashboard_view(request: HttpRequest, site: AdminSite):
     status_filter = request.GET.get("status", "")
     task_name_filter = request.GET.get("task_name", "")
@@ -115,6 +125,11 @@ def patch_admin_site(site):
                 name="celery_monitor_statuses_last_hour_count",
             ),
             path(
+                "celery-monitor/redis-queue-stats",
+                site.admin_view(redis_queue_stats_view),
+                name="celery_monitor_redis_queue_stats",
+            ),
+            path(
                 "celery-monitor/task/<str:task_id>/",
                 site.admin_view(
                     lambda req, task_id: task_detail_view(req, site, task_id)
@@ -149,3 +164,5 @@ def patch_admin_site(site):
         return app_list
 
     site.get_app_list = new_get_app_list
+
+

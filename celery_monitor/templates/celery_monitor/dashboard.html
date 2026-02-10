@@ -13,6 +13,15 @@
 
 {% block content %}
 {% has_celery_results as celery_results_installed %}
+{% has_redis_broker as redis_available %}
+
+{% if redis_available %}
+<div>
+  <h2 class="section-title">Redis Queue Stats</h2>
+  <div hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+</div>
+{% endif %}
+
 {% if celery_results_installed %}
 <div>
   <h2 class="section-title">Overall Stats (django-celery-results)</h2>
@@ -89,5 +98,6 @@
   </tbody>
 </table>
 {% endblock %}
+
 
 
