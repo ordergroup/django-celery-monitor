@@ -1,0 +1,93 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load celery_monitor_tags %}
+{% block extrabody %}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+{% endblock %}
+
+{% block title %}Celery Monitor Dashboard{% endblock %}
+
+{% block extrastyle %}
+<link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+{% endblock %}
+
+{% block content %}
+{% has_celery_results as celery_results_installed %}
+{% if celery_results_installed %}
+<div>
+  <h2 class="section-title">Overall Stats (django-celery-results)</h2>
+  <div hx-get="{% url 'admin:celery_monitor_statuses_overall_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+</div>
+
+<div>
+  <h2 class="section-title">Last Hour (django-celery-results)</h2>
+  <div hx-get="{% url 'admin:celery_monitor_statuses_last_hour_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+</div>
+{% endif %}
+
+<h2 class="section-title">Recent Tasks (last 50)</h2>
+
+<form class="filters" method="get">
+  <div class="filter-group">
+    <label for="status">Status:</label>
+    <select name="status" id="status" onchange="this.form.submit()">
+      <option value="">All</option>
+      <option value="SUCCESS" {% if current_status == "SUCCESS" %}selected{% endif %}>SUCCESS</option>
+      <option value="FAILURE" {% if current_status == "FAILURE" %}selected{% endif %}>FAILURE</option>
+      <option value="STARTED" {% if current_status == "STARTED" %}selected{% endif %}>STARTED</option>
+      <option value="PENDING" {% if current_status == "PENDING" %}selected{% endif %}>PENDING</option>
+      <option value="RETRY" {% if current_status == "RETRY" %}selected{% endif %}>RETRY</option>
+      <option value="REVOKED" {% if current_status == "REVOKED" %}selected{% endif %}>REVOKED</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="task_name">Task:</label>
+    <select name="task_name" id="task_name" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for name in task_names %}
+        <option value="{{ name }}" {% if current_task_name == name %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="worker">Worker:</label>
+    <select name="worker" id="worker" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for w in workers %}
+        <option value="{{ w }}" {% if current_worker == w %}selected{% endif %}>{{ w }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+<table class="task-table">
+  <thead>
+    <tr>
+      <th>Task ID</th>
+      <th>Task Name</th>
+      <th>Status</th>
+      <th>Worker</th>
+      <th>Started</th>
+      <th>Completed</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task in recent_tasks %}
+    <tr>
+      <td class="task-id-cell">
+        <a href="{% url 'admin:celery_monitor_task_detail' task.task_id %}">{{ task.task_id|truncatechars:20 }}</a>
+      </td>
+      <td>{{ task.task_name|default:"-" }}</td>
+      <td><span class="status-badge {{ task.status }}">{{ task.status }}</span></td>
+      <td>{{ task.worker|default:"-" }}</td>
+      <td>{{ task.date_started|default:"-" }}</td>
+      <td>{{ task.date_done }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty-row">No tasks found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+

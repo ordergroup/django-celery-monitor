@@ -1,0 +1,30 @@
+<div class="stats-grid">
+  <div class="stat-card total">
+    <span class="count">{{ status_counts.total|default:"0" }}</span>
+    <span class="label">Total</span>
+  </div>
+  <div class="stat-card success">
+    <span class="count">{{ status_counts.SUCCESS|default:"0" }}</span>
+    <span class="label">Success</span>
+  </div>
+  <div class="stat-card failure">
+    <span class="count">{{ status_counts.FAILURE|default:"0" }}</span>
+    <span class="label">Failure</span>
+  </div>
+  <div class="stat-card started">
+    <span class="count">{{ status_counts.STARTED|default:"0" }}</span>
+    <span class="label">Started</span>
+  </div>
+  <div class="stat-card pending">
+    <span class="count">{{ status_counts.PENDING|default:"0" }}</span>
+    <span class="label">Pending</span>
+  </div>
+  <div class="stat-card retry">
+    <span class="count">{{ status_counts.RETRY|default:"0" }}</span>
+    <span class="label">Retry</span>
+  </div>
+  <div class="stat-card revoked">
+    <span class="count">{{ status_counts.REVOKED|default:"0" }}</span>
+    <span class="label">Revoked</span>
+  </div>
+</div>
