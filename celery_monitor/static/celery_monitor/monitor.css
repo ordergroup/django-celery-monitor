@@ -60,6 +60,99 @@
   margin-bottom: 0;
 }
 
+/* ── Worker cards ─────────────────────────────────────────── */
+
+.workers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.worker-card {
+  background: var(--body-bg, #fff);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  padding: 16px;
+}
+.worker-card.online {
+  border-left: 4px solid #28a745;
+}
+.worker-card.offline {
+  border-left: 4px solid #dc3545;
+  opacity: 0.7;
+}
+.worker-card.has-active-tasks {
+  background: #f0f9ff;
+  border-left-width: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  .worker-card.has-active-tasks {
+    background: #1e3a5f;
+  }
+}
+.worker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+.worker-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--body-fg, #333);
+  word-break: break-all;
+}
+.worker-card .status-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+}
+.worker-card .status-badge.online {
+  background: #d4edda;
+  color: #155724;
+}
+.worker-card .status-badge.offline {
+  background: #f8d7da;
+  color: #721c24;
+}
+.worker-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.worker-details .detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+.worker-details .label {
+  color: var(--body-quiet-color, #666);
+}
+.worker-details .value {
+  font-weight: 600;
+  color: var(--body-fg, #333);
+}
+.worker-details .value.active {
+  color: #ff6b35;
+  font-size: 15px;
+  font-weight: 700;
+}
+.worker-details .value.idle {
+  color: var(--body-quiet-color, #999);
+}
+
+@media (prefers-color-scheme: dark) {
+  .worker-card .status-badge.online {
+    background: #1b4332;
+    color: #95d5b2;
+  }
+  .worker-card .status-badge.offline {
+    background: #4a1520;
+    color: #f5a3b0;
+  }
+}
+
 /* ── Stat cards ───────────────────────────────────────────── */
 
 .stats-grid {
@@ -115,6 +208,28 @@
   border-radius: 4px;
   background: var(--body-bg, #fff);
   color: var(--body-fg, #333);
+}
+.filters input[type="number"],
+.filters input[type="text"] {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  background: var(--body-bg, #fff);
+  color: var(--body-fg, #333);
+  width: 80px;
+}
+.filters button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  background: var(--body-bg, #fff);
+  color: var(--body-fg, #333);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.filters button:hover {
+  background: var(--darkened-bg, #e9ecef);
 }
 .filters label {
   font-weight: bold;
@@ -229,6 +344,15 @@ table.task-execution-table th {
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
+}
+table.task-execution-table th a {
+  color: var(--body-fg, #333);
+  text-decoration: none;
+  display: block;
+  cursor: pointer;
+}
+table.task-execution-table th a:hover {
+  color: var(--link-fg, #417690);
 }
 table.task-execution-table tbody tr:hover {
   background: var(--darkened-bg, #f9f9f9);

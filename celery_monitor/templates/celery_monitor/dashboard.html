@@ -15,6 +15,11 @@
 {% has_celery_results as celery_results_installed %}
 {% has_redis_broker as redis_available %}
 
+<div>
+  <h2 class="section-title">Workers</h2>
+  <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+</div>
+
 {% if redis_available %}
 <div>
   <h2 class="section-title">Redis Queue Stats</h2>
@@ -105,9 +110,3 @@
   </tbody>
 </table>
 {% endblock %}
-
-
-
-
-
-

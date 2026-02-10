@@ -12,8 +12,60 @@
 {% endblock %}
 
 {% block content %}
-<h1>Task Execution Stats</h1>
+<form class="filters" method="get" id="time-range-form">
+  <input type="hidden" name="hours" id="hours" value="{{ current_hours }}">
+  <div class="filter-group">
+    <label>Time Range:</label>
+    <button type="button" onclick="document.getElementById('hours').value=1; document.getElementById('time-range-form').submit();">1h</button>
+    <button type="button" onclick="document.getElementById('hours').value=24; document.getElementById('time-range-form').submit();">24h</button>
+    <button type="button" onclick="document.getElementById('hours').value=168; document.getElementById('time-range-form').submit();">7d</button>
+    <button type="button" onclick="document.getElementById('hours').value=720; document.getElementById('time-range-form').submit();">30d</button>
+    <button type="button" onclick="document.getElementById('hours').value='all'; document.getElementById('time-range-form').submit();">All</button>
+  </div>
+</form>
 
-<div hx-get="{% url 'admin:celery_monitor_task_execution_stats_partial' %}" hx-trigger="load, every 10s" hx-swap="innerHTML"></div>
-
+{% if execution_stats %}
+<table class="task-execution-table">
+  <thead>
+    <tr>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=task_name&order={% if request.GET.sort == 'task_name' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Task Type {% if request.GET.sort == 'task_name' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=total_count&order={% if request.GET.sort == 'total_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Total {% if request.GET.sort == 'total_count' or not request.GET.sort %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=success_count&order={% if request.GET.sort == 'success_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Success {% if request.GET.sort == 'success_count' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=failure_count&order={% if request.GET.sort == 'failure_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Failure {% if request.GET.sort == 'failure_count' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th>Success Rate</th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=avg_runtime&order={% if request.GET.sort == 'avg_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Avg Runtime {% if request.GET.sort == 'avg_runtime' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stat in execution_stats %}
+    <tr>
+      <td class="task-name">{{ stat.task_name }}</td>
+      <td class="stat-count">{{ stat.total_count }}</td>
+      <td class="stat-count success">{{ stat.success_count }}</td>
+      <td class="stat-count failure">{{ stat.failure_count }}</td>
+      <td class="success-rate">
+        {% widthratio stat.success_count stat.total_count 100 %}%
+      </td>
+      <td class="runtime">
+        {% if stat.avg_runtime %}
+          {% if stat.avg_runtime < 1 %}
+            {{ stat.avg_runtime|floatformat:2 }}s
+          {% elif stat.avg_runtime < 60 %}
+            {{ stat.avg_runtime|floatformat:1 }}s
+          {% elif stat.avg_runtime < 3600 %}
+            {% widthratio stat.avg_runtime 60 1 %}m {% widthratio stat.avg_runtime 1 1 %}s
+          {% else %}
+            {% widthratio stat.avg_runtime 3600 1 %}h
+          {% endif %}
+        {% else %}
+          <span class="no-data">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-message">No task execution data available</p>
+{% endif %}
 {% endblock %}

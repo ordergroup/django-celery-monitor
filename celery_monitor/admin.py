@@ -49,26 +49,61 @@ def redis_queue_task_types_view(request: HttpRequest):
     )
 
 
-def task_execution_stats_view(request: HttpRequest, site: AdminSite):
-    execution_stats = queries.get_task_execution_stats()
-    context = {
-        **site.each_context(request),
-        "title": "Task Execution Stats",
-        "execution_stats": execution_stats,
-    }
+def worker_stats_view(request: HttpRequest):
+    worker_stats = queries.get_worker_stats()
+    context = {"worker_stats": worker_stats}
     return TemplateResponse(
         request,
-        "celery_monitor/task_execution_stats.html",
+        "celery_monitor/partials/worker_stats.html",
         context,
     )
 
 
-def task_execution_stats_partial_view(request: HttpRequest):
-    execution_stats = queries.get_task_execution_stats()
-    context = {"execution_stats": execution_stats}
+def task_execution_stats_view(request: HttpRequest, site: AdminSite):
+    hours_param = request.GET.get("hours", "1")
+
+    if hours_param == "all":
+        hours = None
+        current_hours = "all"
+    else:
+        try:
+            hours = int(hours_param)
+            if hours <= 0:
+                hours = 1
+            current_hours = hours
+        except (ValueError, TypeError):
+            hours = 1
+            current_hours = 1
+
+    sort_by = request.GET.get("sort", "total_count")
+    sort_order = request.GET.get("order", "desc")
+
+    valid_sorts = [
+        "task_name",
+        "total_count",
+        "success_count",
+        "failure_count",
+        "avg_runtime",
+    ]
+    if sort_by not in valid_sorts:
+        sort_by = "total_count"
+    if sort_order not in ["asc", "desc"]:
+        sort_order = "desc"
+
+    execution_stats = queries.get_task_execution_stats(
+        hours=hours, sort_by=sort_by, sort_order=sort_order
+    )
+    context = {
+        **site.each_context(request),
+        "title": "Task Execution Stats",
+        "execution_stats": execution_stats,
+        "current_hours": current_hours,
+        "current_sort": sort_by,
+        "current_order": sort_order,
+    }
     return TemplateResponse(
         request,
-        "celery_monitor/partials/task_execution_stats.html",
+        "celery_monitor/task_execution_stats.html",
         context,
     )
 
@@ -164,6 +199,11 @@ def patch_admin_site(site):
                 name="celery_monitor_redis_queue_stats",
             ),
             path(
+                "celery-monitor/worker-stats",
+                site.admin_view(worker_stats_view),
+                name="celery_monitor_worker_stats",
+            ),
+            path(
                 "celery-monitor/redis-queue-task-types",
                 site.admin_view(redis_queue_task_types_view),
                 name="celery_monitor_redis_queue_task_types",
@@ -172,11 +212,6 @@ def patch_admin_site(site):
                 "celery-monitor/task-execution-stats",
                 site.admin_view(lambda req: task_execution_stats_view(req, site)),
                 name="celery_monitor_task_execution_stats",
-            ),
-            path(
-                "celery-monitor/task-execution-stats-partial",
-                site.admin_view(task_execution_stats_partial_view),
-                name="celery_monitor_task_execution_stats_partial",
             ),
             path(
                 "celery-monitor/task/<str:task_id>/",
@@ -232,10 +267,3 @@ def patch_admin_site(site):
         return app_list
 
     site.get_app_list = new_get_app_list
-
-
-
-
-
-
-

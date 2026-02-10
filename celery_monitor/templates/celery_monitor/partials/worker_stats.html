@@ -1,0 +1,26 @@
+{% if worker_stats %}
+<div class="workers-grid">
+  {% for worker in worker_stats %}
+  <div class="worker-card {% if worker.status == 'online' %}online{% else %}offline{% endif %} {% if worker.active_tasks > 0 %}has-active-tasks{% endif %}">
+    <div class="worker-header">
+      <span class="worker-name">{{ worker.name }}</span>
+      <span class="status-badge {{ worker.status }}">{{ worker.status|upper }}</span>
+    </div>
+    <div class="worker-details">
+      <div class="detail-row">
+        <span class="label">Active Tasks:</span>
+        <span class="value {% if worker.active_tasks > 0 %}active{% else %}idle{% endif %}">{{ worker.active_tasks }}</span>
+      </div>
+      {% if worker.max_concurrency %}
+      <div class="detail-row">
+        <span class="label">Concurrency:</span>
+        <span class="value">{{ worker.max_concurrency }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty-message">No workers detected</p>
+{% endif %}

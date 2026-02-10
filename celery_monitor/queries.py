@@ -95,7 +95,71 @@ def get_redis_queue_stats() -> list[QueueStats]:
             queue_stats.append(QueueStats(queue_name=queue_name, count=count))
             total_count += count
 
+        # Sort queue stats by name
+        queue_stats.sort(key=lambda q: q.queue_name)
+
         return [QueueStats(queue_name="total", count=total_count), *queue_stats]
+
+    except Exception:
+        return []
+
+
+@dataclass
+class WorkerStats:
+    name: str
+    status: str  # online, offline
+    active_tasks: int
+    pool_size: int | None = None
+    max_concurrency: int | None = None
+
+
+def get_worker_stats() -> list[WorkerStats]:
+    """Get stats for all Celery workers."""
+    try:
+        from celery import current_app
+
+        inspect = current_app.control.inspect(timeout=0.1)
+
+        active_workers = inspect.active()
+
+        workers = []
+
+        if active_workers:
+            for worker_name, active_tasks_list in active_workers.items():
+                active_count = len(active_tasks_list) if active_tasks_list else 0
+
+                workers.append(
+                    WorkerStats(
+                        name=worker_name,
+                        status="online",
+                        active_tasks=active_count,
+                        pool_size=None,
+                        max_concurrency=None,
+                    )
+                )
+
+        if has_django_celery_result():
+            from django_celery_results.models import TaskResult
+
+            recent_workers = (
+                TaskResult.objects.exclude(worker__isnull=True)
+                .values_list("worker", flat=True)
+                .distinct()[:50]
+            )
+
+            online_worker_names = {w.name for w in workers}
+            for worker_name in recent_workers:
+                if worker_name not in online_worker_names:
+                    workers.append(
+                        WorkerStats(
+                            name=worker_name,
+                            status="offline",
+                            active_tasks=0,
+                        )
+                    )
+
+        workers.sort(key=lambda w: (w.status != "online", w.name))
+        return workers
 
     except Exception:
         return []
@@ -141,7 +205,6 @@ def get_redis_queue_task_types() -> list[QueueTaskTypeStats]:
             messages = r.lrange(queue_name, 0, -1)
             for msg in messages:
                 try:
-                    # Celery stores messages as JSON with 'task' field containing task name
                     decoded = json.loads(msg)
                     if "headers" in decoded and "task" in decoded["headers"]:
                         task_name = decoded["headers"]["task"]
@@ -152,7 +215,6 @@ def get_redis_queue_task_types() -> list[QueueTaskTypeStats]:
 
                     task_types[task_name] = task_types.get(task_name, 0) + 1
                 except (json.JSONDecodeError, KeyError):
-                    # If we can't parse the message, skip it
                     pass
 
             for task_name, count in task_types.items():
@@ -174,11 +236,12 @@ class TaskExecutionStats:
     total_count: int
     success_count: int
     failure_count: int
-    avg_runtime: float | None  # Average runtime in seconds
+    avg_runtime: float | None
 
 
-def get_task_execution_stats() -> list[TaskExecutionStats]:
-    """Get execution time and success/failure stats per task type."""
+def get_task_execution_stats(
+    hours: int | None = 1, sort_by: str = "total_count", sort_order: str = "desc"
+) -> list[TaskExecutionStats]:
     if not has_django_celery_result():
         return []
 
@@ -186,23 +249,24 @@ def get_task_execution_stats() -> list[TaskExecutionStats]:
         from django.db.models import Avg, Count, F, Q
         from django_celery_results.models import TaskResult
 
-        # Get stats grouped by task name
-        stats = (
-            TaskResult.objects.values("task_name")
-            .annotate(
-                total_count=Count("id"),
-                success_count=Count("id", filter=Q(status="SUCCESS")),
-                failure_count=Count("id", filter=Q(status="FAILURE")),
-                avg_runtime=Avg(
-                    F("date_done") - F("date_started"),
-                    filter=Q(
-                        status="SUCCESS",
-                        date_started__isnull=False,
-                        date_done__isnull=False,
-                    ),
+        queryset = TaskResult.objects.all()
+
+        if hours is not None:
+            time_threshold = timezone.now() - timedelta(hours=hours)
+            queryset = queryset.filter(date_done__gte=time_threshold)
+
+        stats = queryset.values("task_name").annotate(
+            total_count=Count("id"),
+            success_count=Count("id", filter=Q(status="SUCCESS")),
+            failure_count=Count("id", filter=Q(status="FAILURE")),
+            avg_runtime=Avg(
+                F("date_done") - F("date_started"),
+                filter=Q(
+                    status="SUCCESS",
+                    date_started__isnull=False,
+                    date_done__isnull=False,
                 ),
-            )
-            .order_by("-total_count")
+            ),
         )
 
         result = []
@@ -221,11 +285,22 @@ def get_task_execution_stats() -> list[TaskExecutionStats]:
                 )
             )
 
+        reverse = sort_order == "desc"
+        if sort_by == "task_name":
+            result.sort(key=lambda x: x.task_name, reverse=reverse)
+        elif sort_by == "total_count":
+            result.sort(key=lambda x: x.total_count, reverse=reverse)
+        elif sort_by == "success_count":
+            result.sort(key=lambda x: x.success_count, reverse=reverse)
+        elif sort_by == "failure_count":
+            result.sort(key=lambda x: x.failure_count, reverse=reverse)
+        elif sort_by == "avg_runtime":
+            result.sort(
+                key=lambda x: x.avg_runtime if x.avg_runtime is not None else -1,
+                reverse=reverse,
+            )
+
         return result
 
     except Exception:
         return []
-
-
-
-
