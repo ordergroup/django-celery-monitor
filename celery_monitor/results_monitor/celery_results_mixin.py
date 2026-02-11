@@ -56,8 +56,10 @@ class CeleryResultsMixin:
         workers = super().get_worker_stats()
         worker_names = {worker.name for worker in workers}
         try:
+            day_ago = timezone.now() - timedelta(days=1)
             recent_workers = set(
-                TaskResult.objects.exclude(worker__isnull=True)
+                TaskResult.objects.filter(date_created__gte=day_ago)
+                .exclude(worker__isnull=True)
                 .values_list("worker", flat=True)
                 .distinct()
             )
