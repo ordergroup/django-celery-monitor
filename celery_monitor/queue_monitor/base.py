@@ -1,11 +1,9 @@
-from abc import ABC
-
 from celery import current_app
 
 from celery_monitor.models import QueueStats, QueueTaskTypeStats
 
 
-class QueueMonitor(ABC):
+class QueueMonitor:
     def __init__(self):
         self.broker_url = current_app.conf.broker_url
 

@@ -25,14 +25,20 @@ class TaskResultFactory(factory.django.DjangoModelFactory):
     )
     content_type = "application/json"
     content_encoding = "utf-8"
-    result = factory.LazyAttribute(lambda obj: '{"result": "ok"}' if obj.status == "SUCCESS" else None)
-    
+    result = factory.LazyAttribute(
+        lambda obj: '{"result": "ok"}' if obj.status == "SUCCESS" else None
+    )
+
     # Set dates with consistent execution time (10 seconds by default)
     # These will use timezone.now() which can be frozen with time-machine
-    date_created = factory.LazyFunction(lambda: timezone.now() - timedelta(minutes=30, seconds=11))
-    date_started = factory.LazyFunction(lambda: timezone.now() - timedelta(minutes=30, seconds=10))
+    date_created = factory.LazyFunction(
+        lambda: timezone.now() - timedelta(minutes=30, seconds=11)
+    )
+    date_started = factory.LazyFunction(
+        lambda: timezone.now() - timedelta(minutes=30, seconds=10)
+    )
     date_done = factory.LazyFunction(lambda: timezone.now() - timedelta(minutes=30))
-    
+
     traceback = factory.LazyAttribute(
         lambda obj: "Traceback..." if obj.status == "FAILURE" else None
     )

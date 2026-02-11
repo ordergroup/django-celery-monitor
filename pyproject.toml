@@ -76,6 +76,10 @@ lint.ignore = [
   "E501", # line too long (handled by formatter)
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ] # unused imports in __init__.py
+lint.per-file-ignores."tests/**/*.py" = [
+  "DJ008", # Model does not define __str__ method
+  "F821",  # Undefined name
+]
 lint.isort.known-first-party = [ "celery_monitor" ]
 lint.isort.section-order = [
   "future",
@@ -105,3 +109,4 @@ markers = [
   "unit: Unit tests",
   "integration: Integration tests",
 ]
+

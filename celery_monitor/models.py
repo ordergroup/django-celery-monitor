@@ -11,6 +11,9 @@ class CeleryStatusCount(models.Model):
         managed = False
         db_table = "celery_status_counts"
 
+    def __str__(self) -> str:
+        return f"{self.status}: {self.count}"
+
 
 @dataclass()
 class QueueStats:
@@ -65,5 +68,3 @@ class RecentTasksData:
     recent_tasks: list[RecentTask]
     task_names: list[str]
     workers: list[str]
-
-

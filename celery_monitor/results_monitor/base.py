@@ -44,7 +44,7 @@ class CeleryResultsMonitor:
                 active_tasks_list = []
                 if active_workers and worker_name in active_workers:
                     active_tasks_list = active_workers[worker_name]
-                
+
                 active_count = len(active_tasks_list) if active_tasks_list else 0
 
                 workers.append(
@@ -78,6 +78,3 @@ class CeleryResultsMonitor:
         limit: int = 50,
     ) -> RecentTasksData:
         return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
-
-
-

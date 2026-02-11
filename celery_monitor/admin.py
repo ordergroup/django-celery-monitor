@@ -148,6 +148,8 @@ def dashboard_view(request: HttpRequest, site: AdminSite):
 
 
 def task_detail_view(request: HttpRequest, site: AdminSite, task_id: int):
+    from django_celery_results.models import TaskResult
+
     task = TaskResult.objects.get(task_id=task_id)
     context = {
         **site.each_context(request),

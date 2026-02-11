@@ -29,4 +29,3 @@ def has_redis() -> bool:
         return True
     except Exception:
         return False
-

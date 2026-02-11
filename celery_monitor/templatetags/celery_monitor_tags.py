@@ -22,7 +22,7 @@ def format_duration(seconds):
     """Format duration in seconds to human readable format."""
     if seconds is None:
         return "-"
-    
+
     if seconds < 1:
         return f"{seconds:.3f}s"
     elif seconds < 60:

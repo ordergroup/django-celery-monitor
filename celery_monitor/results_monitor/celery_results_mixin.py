@@ -150,7 +150,7 @@ class CeleryResultsMixin:
     ) -> RecentTasksData:
         try:
             qs = TaskResult.objects.all()
-            
+
             if status:
                 qs = qs.filter(status=status)
             if task_name:
@@ -166,8 +166,10 @@ class CeleryResultsMixin:
                 # Calculate execution time if both dates are available
                 execution_time = None
                 if task.date_started and task.date_done:
-                    execution_time = (task.date_done - task.date_started).total_seconds()
-                
+                    execution_time = (
+                        task.date_done - task.date_started
+                    ).total_seconds()
+
                 recent_tasks.append(
                     RecentTask(
                         task_id=task.task_id,
@@ -202,6 +204,3 @@ class CeleryResultsMixin:
 
         except Exception:
             return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
-
-
-
