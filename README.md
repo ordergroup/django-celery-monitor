@@ -6,8 +6,8 @@ A Django app for admin-based Celery task monitoring with real-time updates.
 
 ## Requirements
 
-- Python >= 3.12
-- Django >= 5.2
+- Python >= 3.10
+- Django >= 4.2
 - Celery >= 5
 
 ## Installation
