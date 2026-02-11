@@ -7,6 +7,8 @@ from django_celery_results.models import TaskResult
 from celery_monitor.models import (
     CeleryStatusCount,
     DashboardStatusCount,
+    RecentTask,
+    RecentTasksData,
     TaskExecutionStats,
     WorkerStats,
 )
@@ -138,3 +140,68 @@ class CeleryResultsMixin:
 
         except Exception:
             return []
+
+    def get_recent_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        limit: int = 50,
+    ) -> RecentTasksData:
+        try:
+            qs = TaskResult.objects.all()
+            
+            if status:
+                qs = qs.filter(status=status)
+            if task_name:
+                qs = qs.filter(task_name=task_name)
+            if worker:
+                qs = qs.filter(worker=worker)
+
+            recent_tasks_qs = qs.order_by("-date_done")[:limit]
+
+            # Convert to RecentTask dataclass
+            recent_tasks = []
+            for task in recent_tasks_qs:
+                # Calculate execution time if both dates are available
+                execution_time = None
+                if task.date_started and task.date_done:
+                    execution_time = (task.date_done - task.date_started).total_seconds()
+                
+                recent_tasks.append(
+                    RecentTask(
+                        task_id=task.task_id,
+                        task_name=task.task_name,
+                        status=task.status,
+                        worker=task.worker,
+                        date_started=task.date_started,
+                        date_done=task.date_done,
+                        execution_time=execution_time,
+                    )
+                )
+
+            # Get distinct task names and workers for filter dropdowns
+            task_names = list(
+                TaskResult.objects.exclude(task_name__isnull=True)
+                .values_list("task_name", flat=True)
+                .distinct()
+                .order_by("task_name")
+            )
+            workers = list(
+                TaskResult.objects.exclude(worker__isnull=True)
+                .values_list("worker", flat=True)
+                .distinct()
+                .order_by("worker")
+            )
+
+            return RecentTasksData(
+                recent_tasks=recent_tasks,
+                task_names=task_names,
+                workers=workers,
+            )
+
+        except Exception:
+            return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+
+
+

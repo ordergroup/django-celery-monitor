@@ -2,6 +2,7 @@ from celery import current_app
 
 from celery_monitor.models import (
     DashboardStatusCount,
+    RecentTasksData,
     TaskExecutionStats,
     WorkerStats,
 )
@@ -68,4 +69,15 @@ class CeleryResultsMonitor:
         sort_order: str = "desc",
     ) -> list[TaskExecutionStats]:
         return []
+
+    def get_recent_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        limit: int = 50,
+    ) -> RecentTasksData:
+        return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+
+
 

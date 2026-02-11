@@ -2,7 +2,6 @@ from django.contrib.admin import AdminSite
 from django.http import HttpRequest
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django_celery_results.models import TaskResult
 
 from celery_monitor.queue_monitor import get_queue_monitor
 from celery_monitor.results_monitor import get_results_monitor
@@ -63,6 +62,33 @@ def worker_stats_view(request: HttpRequest):
     )
 
 
+def recent_tasks_view(request: HttpRequest):
+    status_filter = request.GET.get("status") or None
+    task_name_filter = request.GET.get("task_name") or None
+    worker_filter = request.GET.get("worker") or None
+
+    results_monitor = get_results_monitor()
+    data = results_monitor.get_recent_tasks(
+        status=status_filter,
+        task_name=task_name_filter,
+        worker=worker_filter,
+    )
+
+    context = {
+        "recent_tasks": data.recent_tasks,
+        "current_status": status_filter or "",
+        "current_task_name": task_name_filter or "",
+        "current_worker": worker_filter or "",
+        "task_names": data.task_names,
+        "workers": data.workers,
+    }
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/recent_tasks.html",
+        context,
+    )
+
+
 def task_execution_stats_view(request: HttpRequest, site: AdminSite):
     hours_param = request.GET.get("hours", "1")
 
@@ -114,27 +140,9 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
 
 
 def dashboard_view(request: HttpRequest, site: AdminSite):
-    status_filter = request.GET.get("status", "")
-    task_name_filter = request.GET.get("task_name", "")
-    worker_filter = request.GET.get("worker", "")
-
-    qs = TaskResult.objects.all()
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-    if task_name_filter:
-        qs = qs.filter(task_name=task_name_filter)
-    if worker_filter:
-        qs = qs.filter(worker=worker_filter)
-
-    recent_tasks = qs.order_by("-date_done")[:50]
-
     context = {
         **site.each_context(request),
         "title": "Celery Monitor",
-        "recent_tasks": recent_tasks,
-        "current_status": status_filter,
-        "current_task_name": task_name_filter,
-        "current_worker": worker_filter,
     }
     return TemplateResponse(request, "celery_monitor/dashboard.html", context)
 
@@ -159,6 +167,11 @@ def patch_admin_site(site):
                 "celery-monitor/",
                 site.admin_view(lambda req: dashboard_view(req, site)),
                 name="celery_monitor_dashboard",
+            ),
+            path(
+                "celery-monitor/recent-tasks",
+                site.admin_view(recent_tasks_view),
+                name="celery_monitor_recent_tasks",
             ),
             path(
                 "celery-monitor/status-counts-overall",
