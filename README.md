@@ -102,3 +102,67 @@ python manage.py migrate celery_monitor
 
 This creates a `CeleryStatusCount` materialized view that caches status counts.
 
+## Development
+
+### Running Tests Locally
+
+This project uses [tox](https://tox.wiki/) to test multiple configurations. Tests are run against different settings to ensure compatibility with and without optional dependencies.
+
+#### Install Development Dependencies
+
+```bash
+uv sync --all-extras --dev
+```
+
+#### Run All Test Environments
+
+```bash
+uv run tox
+```
+
+This runs tests in 4 configurations:
+- `py312-base` - Without django-celery-results
+- `py312-celeryresults` - With django-celery-results
+- `py312-redis` - Redis broker only
+- `py312-redis-celeryresults` - Redis + django-celery-results
+
+#### Run Specific Test Environment
+
+```bash
+# Test without django-celery-results
+uv run tox -e py312-base
+
+# Test with django-celery-results
+uv run tox -e py312-celeryresults
+
+# Test with Redis configuration
+uv run tox -e py312-redis
+```
+
+#### Run Tests Directly with pytest
+
+```bash
+# Default configuration (no django-celery-results)
+uv run pytest tests/ -v
+
+# With django-celery-results
+uv run pytest tests/ -v --ds=tests.settings_with_celery_results
+
+# With Redis settings
+uv run pytest tests/ -v --ds=tests.settings_redis
+```
+
+#### Code Quality Checks
+
+```bash
+# Run ruff linter
+uv run ruff check celery_monitor tests
+
+# Run ruff formatter
+uv run ruff format celery_monitor tests
+
+# Check formatting without changes
+uv run ruff format --check celery_monitor tests
+```
+
+
