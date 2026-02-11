@@ -24,7 +24,7 @@ def has_redis() -> bool:
         if not broker_url or not broker_url.startswith("redis://"):
             return False
 
-        r = redis.from_url(broker_url, socket_connect_timeout=1)
+        r = redis.from_url(broker_url, socket_connect_timeout=3)
         r.ping()
         return True
     except Exception:

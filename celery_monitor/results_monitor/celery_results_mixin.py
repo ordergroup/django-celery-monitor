@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.db.models import Avg, Count, F, Q
@@ -12,6 +13,8 @@ from celery_monitor.models import (
     TaskExecutionStats,
     WorkerStats,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CeleryResultsMixin:
@@ -77,7 +80,8 @@ class CeleryResultsMixin:
 
             return sorted(workers, key=lambda w: (w.status != "online", w.name))
 
-        except Exception:
+        except Exception as e:
+            logger.exception("Error getting worker stats from celery results: %s", e)
             return workers
 
     def get_task_execution_stats(
@@ -140,7 +144,8 @@ class CeleryResultsMixin:
 
             return result
 
-        except Exception:
+        except Exception as e:
+            logger.exception("Error getting task execution stats: %s", e)
             return []
 
     def get_recent_tasks(
@@ -204,5 +209,6 @@ class CeleryResultsMixin:
                 workers=workers,
             )
 
-        except Exception:
+        except Exception as e:
+            logger.exception("Error getting recent tasks: %s", e)
             return RecentTasksData(recent_tasks=[], task_names=[], workers=[])

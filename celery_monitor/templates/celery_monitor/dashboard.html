@@ -1,8 +1,19 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% load celery_monitor_tags %}
-{% block extrabody %}
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" 
+        integrity="sha384-kBkPm+1FfKdJnqR1U8pAy5ZH1kjQZPXMy8DLQqmPvfZCU/wB7q8OLvDlG5yPfKKP" 
+        crossorigin="anonymous"></script>
+{% endblock %}
+
+{% block title %}Celery Monitor Dashboard{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
 <script>
 function toggleAccordion(id) {
   const element = document.getElementById(id);
@@ -16,12 +27,6 @@ function toggleAccordion(id) {
   }
 }
 </script>
-{% endblock %}
-
-{% block title %}Celery Monitor Dashboard{% endblock %}
-
-{% block extrastyle %}
-<link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
 {% endblock %}
 
 {% block content %}

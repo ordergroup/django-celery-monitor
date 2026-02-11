@@ -1,3 +1,5 @@
+import logging
+
 from celery import current_app
 
 from celery_monitor.models import (
@@ -7,6 +9,8 @@ from celery_monitor.models import (
     WorkerStats,
 )
 from celery_monitor.utils import has_django_celery_result, is_postgres
+
+logger = logging.getLogger(__name__)
 
 
 class CeleryResultsMonitor:
@@ -22,7 +26,7 @@ class CeleryResultsMonitor:
 
     def get_worker_stats(self) -> list[WorkerStats]:
         try:
-            inspect = current_app.control.inspect(timeout=1.0)
+            inspect = current_app.control.inspect(timeout=3.0)
 
             # Get online workers using ping
             ping_response = inspect.ping()
@@ -59,7 +63,8 @@ class CeleryResultsMonitor:
 
             return sorted(workers, key=lambda w: (w.status != "online", w.name))
 
-        except Exception:
+        except Exception as e:
+            logger.exception("Error getting worker stats: %s", e)
             return []
 
     def get_task_execution_stats(
