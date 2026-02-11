@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [master, main, dev]
+    branches: [main, dev]
   pull_request:
-    branches: [master, main, dev]
 
 jobs:
   test:
@@ -13,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +29,10 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run tests with tox
-        run: uv run tox
+        run: |
+          # Run tox environments for current Python version only
+          PYVER=$(echo "${{ matrix.python-version }}" | tr -d '.')
+          uv run tox -e py${PYVER}-django42-base,py${PYVER}-django42-celeryresults,py${PYVER}-django42-redis,py${PYVER}-django42-redis-celeryresults,py${PYVER}-django50-base,py${PYVER}-django50-celeryresults,py${PYVER}-django50-redis,py${PYVER}-django50-redis-celeryresults,py${PYVER}-django52-base,py${PYVER}-django52-celeryresults,py${PYVER}-django52-redis,py${PYVER}-django52-redis-celeryresults
 
       - name: Test package build
         run: uv build
