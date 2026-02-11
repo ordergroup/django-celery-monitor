@@ -1,16 +1,17 @@
 from django.contrib.admin import AdminSite
-from django.db.models import Count
 from django.http import HttpRequest
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django.utils import timezone
 from django_celery_results.models import TaskResult
 
-from celery_monitor import queries
+from celery_monitor.queue_monitor import get_queue_monitor
+from celery_monitor.results_monitor import get_results_monitor
+from celery_monitor.utils import has_django_celery_result
 
 
 def status_counts_overall_view(request: HttpRequest):
-    status_counts = queries.get_overall_status_counts()
+    results_monitor = get_results_monitor()
+    status_counts = results_monitor.get_overall_status_counts()
     context = {"status_counts": {row.status: row.count for row in status_counts}}
     return TemplateResponse(
         request,
@@ -20,7 +21,8 @@ def status_counts_overall_view(request: HttpRequest):
 
 
 def status_counts_last_hour_view(request: HttpRequest):
-    status_counts = queries.get_last_hour_status_counts()
+    results_monitor = get_results_monitor()
+    status_counts = results_monitor.get_last_hour_status_counts()
     context = {"status_counts": {row.status: row.count for row in status_counts}}
     return TemplateResponse(
         request,
@@ -30,8 +32,8 @@ def status_counts_last_hour_view(request: HttpRequest):
 
 
 def redis_queue_stats_view(request: HttpRequest):
-    queue_stats = queries.get_redis_queue_stats()
-    context = {"queue_stats": queue_stats}
+    queue_monitor = get_queue_monitor()
+    context = {"queue_stats": queue_monitor.get_queue_stats()}
     return TemplateResponse(
         request,
         "celery_monitor/partials/queue_stats.html",
@@ -40,7 +42,8 @@ def redis_queue_stats_view(request: HttpRequest):
 
 
 def redis_queue_task_types_view(request: HttpRequest):
-    task_type_stats = queries.get_redis_queue_task_types()
+    queue_monitor = get_queue_monitor()
+    task_type_stats = queue_monitor.get_queue_task_types()
     context = {"task_type_stats": task_type_stats}
     return TemplateResponse(
         request,
@@ -50,7 +53,8 @@ def redis_queue_task_types_view(request: HttpRequest):
 
 
 def worker_stats_view(request: HttpRequest):
-    worker_stats = queries.get_worker_stats()
+    results_monitor = get_results_monitor()
+    worker_stats = results_monitor.get_worker_stats()
     context = {"worker_stats": worker_stats}
     return TemplateResponse(
         request,
@@ -90,7 +94,8 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
     if sort_order not in ["asc", "desc"]:
         sort_order = "desc"
 
-    execution_stats = queries.get_task_execution_stats(
+    results_monitor = get_results_monitor()
+    execution_stats = results_monitor.get_task_execution_stats(
         hours=hours, sort_by=sort_by, sort_order=sort_order
     )
     context = {
@@ -123,38 +128,10 @@ def dashboard_view(request: HttpRequest, site: AdminSite):
 
     recent_tasks = qs.order_by("-date_done")[:50]
 
-    task_names = (
-        TaskResult.objects.values_list("task_name", flat=True)
-        .distinct()
-        .order_by("task_name")
-    )
-    workers = (
-        TaskResult.objects.exclude(worker__isnull=True)
-        .values_list("worker", flat=True)
-        .distinct()
-        .order_by("worker")
-    )
-
-    now = timezone.now()
-    last_hour = now - timezone.timedelta(hours=1)
-    last_hour_counts = (
-        TaskResult.objects.filter(date_done__gte=last_hour)
-        .values("status")
-        .annotate(count=Count("id"))
-        .order_by("status")
-    )
-
-    status_counts = queries.get_overall_status_counts()
-
     context = {
         **site.each_context(request),
         "title": "Celery Monitor",
-        "status_counts": {row.status: row.count for row in status_counts},
-        "last_hour_counts": {row["status"]: row["count"] for row in last_hour_counts},
-        "total_tasks": TaskResult.objects.count(),
         "recent_tasks": recent_tasks,
-        "task_names": task_names,
-        "workers": workers,
         "current_status": status_filter,
         "current_task_name": task_name_filter,
         "current_worker": worker_filter,
@@ -241,9 +218,6 @@ def patch_admin_site(site):
                     "view_only": True,
                 }
             ]
-
-            # Add execution stats if django-celery-results is installed
-            from celery_monitor.utils import has_django_celery_result
 
             if has_django_celery_result():
                 models.append(

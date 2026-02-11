@@ -5,7 +5,7 @@ requires = [ "hatchling" ]
 [project]
 name = "django-celery-monitor"
 version = "0.1.0"
-description = "Reusable Django app for admin-based Celery task monitoring"
+description = "Django app for admin-based Celery task monitoring"
 requires-python = ">=3.12"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
@@ -14,9 +14,14 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+  "celery>=5",
   "django>=5.2",
-  "celery>=5.0",
-  "django-celery-results>=2.0",
+]
+
+[dependency-groups]
+dev = [
+  "celery-types>=0.24",
+  "django-stubs>=5.2.9",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -55,13 +60,7 @@ lint.select = [
   "W",   # pycodestyle warnings
 ]
 lint.ignore = [
-  "B008",  # do not perform function calls in argument defaults
-  "DJ001", # avoid using null=True on string-based fields
-  "E501",  # line too long (handled by formatter)
-]
-lint.per-file-ignores."**/tests/**/*.py" = [
-  "N802", # function name should be lowercase
-  "N806", # variable in function should be lowercase
+  "E501", # line too long (handled by formatter)
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ] # unused imports in __init__.py
 lint.isort.known-first-party = [ "celery_monitor" ]
