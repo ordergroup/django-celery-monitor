@@ -18,8 +18,7 @@ dependencies = [
   "django>=5.2",
 ]
 
-[project.optional-dependencies]
-results = [
+optional-dependencies.results = [
   "django-celery-results>=2.5",
 ]
 
@@ -29,9 +28,10 @@ dev = [
   "django-celery-results>=2.5",
   "django-stubs>=5.2.9",
   "factory-boy>=3.3.3",
-  "fakeredis>=2.33.0",
+  "fakeredis>=2.33",
   "pytest>=9.0.2",
   "pytest-django>=4.11.1",
+  "ruff>=0.15",
   "time-machine>=3.2",
   "tox>=4.23",
   "tox-uv>=1.19",
@@ -105,10 +105,3 @@ markers = [
   "unit: Unit tests",
   "integration: Integration tests",
 ]
-
-
-
-
-
-
-
