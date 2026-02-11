@@ -92,6 +92,17 @@ Run migrations:
 python manage.py migrate django_celery_results
 ```
 
+### Enable Task Execution Time Tracking
+
+To see execution times in the dashboard, enable task start time tracking:
+
+```python
+# settings.py or celery.py
+CELERY_TASK_TRACK_STARTED = True
+```
+
+After adding this setting, restart your Celery workers. New tasks will now display execution times in the "Recent Tasks" section.
+
 ## Optional: PostgreSQL Optimization
 
 If using PostgreSQL, you can create a materialized view for better performance on large datasets:
