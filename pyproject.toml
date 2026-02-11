@@ -18,10 +18,23 @@ dependencies = [
   "django>=5.2",
 ]
 
+[project.optional-dependencies]
+results = [
+  "django-celery-results>=2.5",
+]
+
 [dependency-groups]
 dev = [
   "celery-types>=0.24",
+  "django-celery-results>=2.5",
   "django-stubs>=5.2.9",
+  "factory-boy>=3.3.3",
+  "fakeredis>=2.33.0",
+  "pytest>=9.0.2",
+  "pytest-django>=4.11.1",
+  "time-machine>=3.2",
+  "tox>=4.23",
+  "tox-uv>=1.19",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -71,3 +84,31 @@ lint.isort.section-order = [
   "first-party",
   "local-folder",
 ]
+
+[tool.pytest.ini_options]
+# By default, runs tests without django-celery-results in INSTALLED_APPS
+# To run all tests including django-celery-results:
+#   pytest --ds=tests.settings_with_celery_results
+# To run both configurations:
+#   tox  (recommended - runs all test environments)
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = [ "test_*.py" ]
+python_classes = [ "Test*" ]
+python_functions = [ "test_*" ]
+testpaths = [ "tests" ]
+addopts = [
+  "-v",
+  "--strict-markers",
+  "--tb=short",
+]
+markers = [
+  "unit: Unit tests",
+  "integration: Integration tests",
+]
+
+
+
+
+
+
+
