@@ -89,11 +89,30 @@ class CeleryResultsMixin:
         hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> list[TaskExecutionStats]:
         try:
             queryset = TaskResult.objects.all()
 
-            if hours is not None:
+            if date_from and date_to:
+                from datetime import datetime
+
+                try:
+                    date_from_dt = datetime.fromisoformat(date_from)
+                    date_to_dt = datetime.fromisoformat(date_to)
+                    if timezone.is_naive(date_from_dt):
+                        date_from_dt = timezone.make_aware(date_from_dt)
+                    if timezone.is_naive(date_to_dt):
+                        date_to_dt = timezone.make_aware(date_to_dt)
+                    queryset = queryset.filter(
+                        date_done__gte=date_from_dt, date_done__lte=date_to_dt
+                    )
+                except (ValueError, TypeError):
+                    if hours is not None:
+                        time_threshold = timezone.now() - timedelta(hours=hours)
+                        queryset = queryset.filter(date_done__gte=time_threshold)
+            elif hours is not None:
                 time_threshold = timezone.now() - timedelta(hours=hours)
                 queryset = queryset.filter(date_done__gte=time_threshold)
 

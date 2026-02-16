@@ -72,6 +72,8 @@ class CeleryResultsMonitor:
         hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> list[TaskExecutionStats]:
         return []
 

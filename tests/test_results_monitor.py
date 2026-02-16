@@ -744,3 +744,151 @@ class TestCeleryResultsMixin:
 
         assert stats.max_runtime is not None
         assert 7.5 <= stats.max_runtime <= 8.5
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_with_custom_date_range(self):
+        """Test get_task_execution_stats with custom date range."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        for _i in range(3):
+            task = TaskResultFactory.create(
+                task_name="tasks.in_range",
+                status="SUCCESS",
+                date_started=now - timedelta(days=2, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(days=2, seconds=6),
+                date_done=now - timedelta(days=2),
+            )
+
+        for _i in range(2):
+            task = TaskResultFactory.create(
+                task_name="tasks.out_of_range",
+                status="SUCCESS",
+                date_started=now - timedelta(days=5, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(days=5, seconds=6),
+                date_done=now - timedelta(days=5),
+            )
+
+        mixin = CeleryResultsMixin()
+        date_from = (now - timedelta(days=3)).isoformat()
+        date_to = (now - timedelta(days=1)).isoformat()
+
+        result = mixin.get_task_execution_stats(
+            hours=None, date_from=date_from, date_to=date_to
+        )
+
+        assert len(result) == 1
+        assert result[0].task_name == "tasks.in_range"
+        assert result[0].total_count == 3
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_custom_date_range_with_naive_datetime(self):
+        """Test custom date range handles naive datetime correctly."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        for _i in range(2):
+            task = TaskResultFactory.create(
+                task_name="tasks.test",
+                status="SUCCESS",
+                date_started=now - timedelta(hours=6, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(hours=6, seconds=6),
+                date_done=now - timedelta(hours=6),
+            )
+
+        mixin = CeleryResultsMixin()
+        date_from = "2024-01-15T00:00:00"
+        date_to = "2024-01-15T23:59:59"
+
+        result = mixin.get_task_execution_stats(
+            hours=None, date_from=date_from, date_to=date_to
+        )
+
+        assert len(result) == 1
+        assert result[0].task_name == "tasks.test"
+        assert result[0].total_count == 2
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_invalid_date_range_falls_back_to_hours(self):
+        """Test invalid date range falls back to hours parameter."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        for _i in range(3):
+            task = TaskResultFactory.create(
+                task_name="tasks.recent",
+                status="SUCCESS",
+                date_started=now - timedelta(minutes=30, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(minutes=30, seconds=6),
+                date_done=now - timedelta(minutes=30),
+            )
+
+        for _i in range(2):
+            task = TaskResultFactory.create(
+                task_name="tasks.old",
+                status="SUCCESS",
+                date_started=now - timedelta(hours=5, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(hours=5, seconds=6),
+                date_done=now - timedelta(hours=5),
+            )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(
+            hours=1, date_from="invalid", date_to="invalid"
+        )
+
+        assert len(result) == 1
+        assert result[0].task_name == "tasks.recent"
+        assert result[0].total_count == 3
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_custom_date_range_with_sorting(self):
+        """Test custom date range works with sorting."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.fast",
+            status="SUCCESS",
+            date_started=now - timedelta(days=1, seconds=2),
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(days=1, seconds=3),
+            date_done=now - timedelta(days=1),
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.slow",
+            status="SUCCESS",
+            date_started=now - timedelta(days=1, seconds=10),
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(days=1, seconds=11),
+            date_done=now - timedelta(days=1),
+        )
+
+        mixin = CeleryResultsMixin()
+        date_from = (now - timedelta(days=2)).isoformat()
+        date_to = now.isoformat()
+
+        result = mixin.get_task_execution_stats(
+            hours=None,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by="min_runtime",
+            sort_order="asc",
+        )
+
+        assert len(result) == 2
+        assert result[0].task_name == "tasks.fast"
+        assert result[1].task_name == "tasks.slow"
