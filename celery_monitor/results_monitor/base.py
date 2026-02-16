@@ -35,6 +35,9 @@ class CeleryResultsMonitor:
             # Get active tasks - this shows currently executing tasks
             active_workers = inspect.active()
 
+            # Get active queues for each worker
+            active_queues = inspect.active_queues()
+
             workers = []
             seen_workers = set()
 
@@ -51,6 +54,11 @@ class CeleryResultsMonitor:
 
                 active_count = len(active_tasks_list) if active_tasks_list else 0
 
+                # Get queues for this worker
+                queues = []
+                if active_queues and worker_name in active_queues:
+                    queues = [q["name"] for q in active_queues[worker_name]]
+
                 workers.append(
                     WorkerStats(
                         name=worker_name,
@@ -58,6 +66,7 @@ class CeleryResultsMonitor:
                         active_tasks=active_count,
                         pool_size=None,
                         max_concurrency=None,
+                        queues=queues if queues else None,
                     )
                 )
 

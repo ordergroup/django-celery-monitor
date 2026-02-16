@@ -17,6 +17,12 @@
         <span class="value">{{ worker.max_concurrency }}</span>
       </div>
       {% endif %}
+      {% if worker.queues %}
+      <div class="detail-row">
+        <span class="label">Queues:</span>
+        <span class="value">{{ worker.queues|join:", " }}</span>
+      </div>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

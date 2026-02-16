@@ -28,6 +28,7 @@ class WorkerStats:
     active_tasks: int
     pool_size: int | None = None
     max_concurrency: int | None = None
+    queues: list[str] | None = None
 
 
 @dataclass
