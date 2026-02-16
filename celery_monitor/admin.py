@@ -114,6 +114,8 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
         "success_count",
         "failure_count",
         "avg_runtime",
+        "min_runtime",
+        "max_runtime",
     ]
     if sort_by not in valid_sorts:
         sort_by = "total_count"
