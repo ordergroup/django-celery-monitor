@@ -447,3 +447,300 @@ class TestCeleryResultsMixin:
             result = mixin.get_task_execution_stats()
 
             assert result == []
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_with_min_max_runtime(self):
+        """Test get_task_execution_stats includes min and max runtime."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=2),
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=3),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=10),
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=11),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task3 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=5),
+        )
+        TaskResult.objects.filter(pk=task3.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=6),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(hours=1)
+
+        assert len(result) == 1
+        stats = result[0]
+
+        assert stats.task_name == "tasks.add"
+        assert stats.total_count == 3
+        assert stats.success_count == 3
+        assert stats.failure_count == 0
+
+        assert stats.min_runtime is not None
+        assert 1.5 <= stats.min_runtime <= 2.5
+
+        assert stats.avg_runtime is not None
+        assert 5.0 <= stats.avg_runtime <= 6.5
+
+        assert stats.max_runtime is not None
+        assert 9.5 <= stats.max_runtime <= 10.5
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_min_max_only_success_tasks(self):
+        """Test min/max runtime only includes successful tasks."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=5),
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=6),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="FAILURE",
+            date_started=now - timedelta(minutes=30, seconds=100),
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=101),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task3 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=10),
+        )
+        TaskResult.objects.filter(pk=task3.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=11),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(hours=1)
+
+        assert len(result) == 1
+        stats = result[0]
+
+        assert stats.total_count == 3
+        assert stats.success_count == 2
+        assert stats.failure_count == 1
+
+        assert stats.min_runtime is not None
+        assert 4.5 <= stats.min_runtime <= 5.5
+
+        assert stats.max_runtime is not None
+        assert 9.5 <= stats.max_runtime <= 10.5
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_min_max_none_when_no_success(self):
+        """Test min/max runtime are None when there are no successful tasks."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        for _ in range(3):
+            task = TaskResultFactory.create(
+                task_name="tasks.add",
+                status="FAILURE",
+                date_started=now - timedelta(minutes=30, seconds=5),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(minutes=30, seconds=6),
+                date_done=now - timedelta(minutes=30),
+            )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(hours=1)
+
+        assert len(result) == 1
+        stats = result[0]
+
+        assert stats.total_count == 3
+        assert stats.success_count == 0
+        assert stats.failure_count == 3
+        assert stats.avg_runtime is None
+        assert stats.min_runtime is None
+        assert stats.max_runtime is None
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_min_max_none_when_missing_dates(self):
+        """Test min/max runtime are None when date_started is missing."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=None,
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(minutes=30),
+            date_done=now - timedelta(minutes=30),
+            date_started=None,
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.add",
+            status="SUCCESS",
+            date_started=None,
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=6),
+            date_done=now - timedelta(minutes=30),
+            date_started=None,
+        )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(hours=1)
+
+        assert len(result) == 1
+        stats = result[0]
+
+        assert stats.total_count == 2
+        assert stats.success_count == 2
+        assert stats.avg_runtime is None
+        assert stats.min_runtime is None
+        assert stats.max_runtime is None
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_sort_by_min_runtime(self):
+        """Test sorting by min_runtime."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.fast",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=1),
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=2),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.slow",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=10),
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=11),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(
+            hours=1, sort_by="min_runtime", sort_order="asc"
+        )
+
+        assert len(result) == 2
+        assert result[0].task_name == "tasks.fast"
+        assert result[1].task_name == "tasks.slow"
+
+        result_desc = mixin.get_task_execution_stats(
+            hours=1, sort_by="min_runtime", sort_order="desc"
+        )
+        assert result_desc[0].task_name == "tasks.slow"
+        assert result_desc[1].task_name == "tasks.fast"
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_sort_by_max_runtime(self):
+        """Test sorting by max_runtime."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        task1 = TaskResultFactory.create(
+            task_name="tasks.fast",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=5),
+        )
+        TaskResult.objects.filter(pk=task1.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=6),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        task2 = TaskResultFactory.create(
+            task_name="tasks.slow",
+            status="SUCCESS",
+            date_started=now - timedelta(minutes=30, seconds=20),
+        )
+        TaskResult.objects.filter(pk=task2.pk).update(
+            date_created=now - timedelta(minutes=30, seconds=21),
+            date_done=now - timedelta(minutes=30),
+        )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(
+            hours=1, sort_by="max_runtime", sort_order="asc"
+        )
+
+        assert len(result) == 2
+        assert result[0].task_name == "tasks.fast"
+        assert result[1].task_name == "tasks.slow"
+
+        result_desc = mixin.get_task_execution_stats(
+            hours=1, sort_by="max_runtime", sort_order="desc"
+        )
+        assert result_desc[0].task_name == "tasks.slow"
+        assert result_desc[1].task_name == "tasks.fast"
+
+    @pytest.mark.django_db(transaction=True)
+    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
+    def test_get_task_execution_stats_multiple_tasks_with_varying_runtimes(self):
+        """Test stats with multiple tasks having varying execution times."""
+        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+        runtimes = [2, 5, 3, 8, 4]
+        for runtime in runtimes:
+            task = TaskResultFactory.create(
+                task_name="tasks.variable",
+                status="SUCCESS",
+                date_started=now - timedelta(minutes=30, seconds=runtime),
+            )
+            TaskResult.objects.filter(pk=task.pk).update(
+                date_created=now - timedelta(minutes=30, seconds=runtime + 1),
+                date_done=now - timedelta(minutes=30),
+            )
+
+        mixin = CeleryResultsMixin()
+        result = mixin.get_task_execution_stats(hours=1)
+
+        assert len(result) == 1
+        stats = result[0]
+
+        assert stats.task_name == "tasks.variable"
+        assert stats.total_count == 5
+        assert stats.success_count == 5
+
+        assert stats.min_runtime is not None
+        assert 1.5 <= stats.min_runtime <= 2.5
+
+        assert stats.avg_runtime is not None
+        assert 4.0 <= stats.avg_runtime <= 5.0
+
+        assert stats.max_runtime is not None
+        assert 7.5 <= stats.max_runtime <= 8.5

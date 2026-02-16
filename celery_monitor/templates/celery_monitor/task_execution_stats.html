@@ -33,7 +33,9 @@
       <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=success_count&order={% if request.GET.sort == 'success_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Success {% if request.GET.sort == 'success_count' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
       <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=failure_count&order={% if request.GET.sort == 'failure_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Failure {% if request.GET.sort == 'failure_count' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
       <th>Success Rate</th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=min_runtime&order={% if request.GET.sort == 'min_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Min Runtime {% if request.GET.sort == 'min_runtime' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
       <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=avg_runtime&order={% if request.GET.sort == 'avg_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Avg Runtime {% if request.GET.sort == 'avg_runtime' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?hours={{ request.GET.hours|default:'1' }}&sort=max_runtime&order={% if request.GET.sort == 'max_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Max Runtime {% if request.GET.sort == 'max_runtime' %}{% if request.GET.order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
     </tr>
   </thead>
   <tbody>
@@ -47,6 +49,21 @@
         {% widthratio stat.success_count stat.total_count 100 %}%
       </td>
       <td class="runtime">
+        {% if stat.min_runtime %}
+          {% if stat.min_runtime < 1 %}
+            {{ stat.min_runtime|floatformat:2 }}s
+          {% elif stat.min_runtime < 60 %}
+            {{ stat.min_runtime|floatformat:1 }}s
+          {% elif stat.min_runtime < 3600 %}
+            {% widthratio stat.min_runtime 60 1 %}m {% widthratio stat.min_runtime 1 1 %}s
+          {% else %}
+            {% widthratio stat.min_runtime 3600 1 %}h
+          {% endif %}
+        {% else %}
+          <span class="no-data">—</span>
+        {% endif %}
+      </td>
+      <td class="runtime">
         {% if stat.avg_runtime %}
           {% if stat.avg_runtime < 1 %}
             {{ stat.avg_runtime|floatformat:2 }}s
@@ -56,6 +73,21 @@
             {% widthratio stat.avg_runtime 60 1 %}m {% widthratio stat.avg_runtime 1 1 %}s
           {% else %}
             {% widthratio stat.avg_runtime 3600 1 %}h
+          {% endif %}
+        {% else %}
+          <span class="no-data">—</span>
+        {% endif %}
+      </td>
+      <td class="runtime">
+        {% if stat.max_runtime %}
+          {% if stat.max_runtime < 1 %}
+            {{ stat.max_runtime|floatformat:2 }}s
+          {% elif stat.max_runtime < 60 %}
+            {{ stat.max_runtime|floatformat:1 }}s
+          {% elif stat.max_runtime < 3600 %}
+            {% widthratio stat.max_runtime 60 1 %}m {% widthratio stat.max_runtime 1 1 %}s
+          {% else %}
+            {% widthratio stat.max_runtime 3600 1 %}h
           {% endif %}
         {% else %}
           <span class="no-data">—</span>

@@ -43,6 +43,8 @@ class TaskExecutionStats:
     success_count: int
     failure_count: int
     avg_runtime: float | None
+    min_runtime: float | None
+    max_runtime: float | None
 
 
 @dataclass

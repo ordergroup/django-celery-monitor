@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 
-from django.db.models import Avg, Count, F, Q
+from django.db.models import Avg, Count, F, Max, Min, Q
 from django.utils import timezone
 from django_celery_results.models import TaskResult
 
@@ -109,6 +109,22 @@ class CeleryResultsMixin:
                         date_done__isnull=False,
                     ),
                 ),
+                min_runtime=Min(
+                    F("date_done") - F("date_started"),
+                    filter=Q(
+                        status="SUCCESS",
+                        date_started__isnull=False,
+                        date_done__isnull=False,
+                    ),
+                ),
+                max_runtime=Max(
+                    F("date_done") - F("date_started"),
+                    filter=Q(
+                        status="SUCCESS",
+                        date_started__isnull=False,
+                        date_done__isnull=False,
+                    ),
+                ),
             )
 
             result = []
@@ -117,6 +133,14 @@ class CeleryResultsMixin:
                 if stat["avg_runtime"]:
                     avg_seconds = stat["avg_runtime"].total_seconds()
 
+                min_seconds = None
+                if stat["min_runtime"]:
+                    min_seconds = stat["min_runtime"].total_seconds()
+
+                max_seconds = None
+                if stat["max_runtime"]:
+                    max_seconds = stat["max_runtime"].total_seconds()
+
                 result.append(
                     TaskExecutionStats(
                         task_name=stat["task_name"],
@@ -124,6 +148,8 @@ class CeleryResultsMixin:
                         success_count=stat["success_count"],
                         failure_count=stat["failure_count"],
                         avg_runtime=avg_seconds,
+                        min_runtime=min_seconds,
+                        max_runtime=max_seconds,
                     )
                 )
 
@@ -139,6 +165,16 @@ class CeleryResultsMixin:
             elif sort_by == "avg_runtime":
                 result.sort(
                     key=lambda x: x.avg_runtime if x.avg_runtime is not None else -1,
+                    reverse=reverse,
+                )
+            elif sort_by == "min_runtime":
+                result.sort(
+                    key=lambda x: x.min_runtime if x.min_runtime is not None else -1,
+                    reverse=reverse,
+                )
+            elif sort_by == "max_runtime":
+                result.sort(
+                    key=lambda x: x.max_runtime if x.max_runtime is not None else -1,
                     reverse=reverse,
                 )
 
