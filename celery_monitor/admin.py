@@ -90,9 +90,14 @@ def recent_tasks_view(request: HttpRequest):
 
 
 def task_execution_stats_view(request: HttpRequest, site: AdminSite):
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
     hours_param = request.GET.get("hours", "1")
 
-    if hours_param == "all":
+    if date_from and date_to:
+        hours = None
+        current_hours = "custom"
+    elif hours_param == "all":
         hours = None
         current_hours = "all"
     else:
@@ -124,7 +129,11 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
 
     results_monitor = get_results_monitor()
     execution_stats = results_monitor.get_task_execution_stats(
-        hours=hours, sort_by=sort_by, sort_order=sort_order
+        hours=hours,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        date_from=date_from,
+        date_to=date_to,
     )
     context = {
         **site.each_context(request),
@@ -133,6 +142,8 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
         "current_hours": current_hours,
         "current_sort": sort_by,
         "current_order": sort_order,
+        "date_from": date_from,
+        "date_to": date_to,
     }
     return TemplateResponse(
         request,
