@@ -82,6 +82,10 @@ class TestCeleryResultsMonitor:
             "worker1@host": [{"id": "task1"}, {"id": "task2"}],
             "worker2@host": [],
         }
+        mock_inspect.active_queues.return_value = {
+            "worker1@host": [{"name": "celery"}, {"name": "high_priority"}],
+            "worker2@host": [{"name": "celery"}],
+        }
         mock_app.control.inspect.return_value = mock_inspect
 
         monitor = CeleryResultsMonitor()
@@ -91,9 +95,11 @@ class TestCeleryResultsMonitor:
         assert result[0].name == "worker1@host"
         assert result[0].status == "online"
         assert result[0].active_tasks == 2
+        assert result[0].queues == ["celery", "high_priority"]
         assert result[1].name == "worker2@host"
         assert result[1].status == "online"
         assert result[1].active_tasks == 0
+        assert result[1].queues == ["celery"]
 
     @patch("celery_monitor.results_monitor.base.current_app")
     def test_get_worker_stats_no_workers(self, mock_app):
@@ -101,6 +107,7 @@ class TestCeleryResultsMonitor:
         mock_inspect = Mock()
         mock_inspect.ping.return_value = None
         mock_inspect.active.return_value = None
+        mock_inspect.active_queues.return_value = None
         mock_app.control.inspect.return_value = mock_inspect
 
         monitor = CeleryResultsMonitor()
@@ -205,6 +212,7 @@ class TestCeleryResultsMixin:
         mock_inspect.active.return_value = {
             "worker1@host": [{"id": "task1"}, {"id": "task2"}]
         }
+        mock_inspect.active_queues.return_value = {"worker1@host": [{"name": "celery"}]}
         mock_app.control.inspect.return_value = mock_inspect
 
         # The mixin needs to be used properly by inheriting from the base class
