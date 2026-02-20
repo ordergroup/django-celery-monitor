@@ -3,11 +3,6 @@
 
 {% block title %}Task {{ task.task_id }}{% endblock %}
 
-{% block extrahead %}
-{{ block.super }}
-<script src="{% static 'celery_monitor/theme.js' %}"></script>
-{% endblock %}
-
 {% block extrastyle %}
 <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
 {% endblock %}
