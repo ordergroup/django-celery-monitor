@@ -88,9 +88,15 @@ def drop_trigger(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("django_celery_results", "__latest__"),
-    ]
+    dependencies = []
+
+    # Check if django_celery_results is installed at migration time
+    try:
+        from django.apps import apps
+        if apps.is_installed('django_celery_results'):
+            dependencies = [("django_celery_results", "__latest__")]
+    except Exception:
+        pass
 
     operations = [
         # Create the materialized view (PostgreSQL only)
