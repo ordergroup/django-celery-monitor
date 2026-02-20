@@ -1,3 +1,5 @@
+import inspect
+
 from django.contrib.admin import AdminSite
 from django.http import HttpRequest
 from django.template.response import TemplateResponse
@@ -228,10 +230,17 @@ def patch_admin_site(site):
         ]
         return custom_urls + _orig_get_urls()
 
+    _orig_supports_app_label = (
+        "app_label" in inspect.signature(_orig_get_app_list).parameters
+    )
+
     site.get_urls = new_get_urls
 
     def new_get_app_list(request, app_label=None):
-        app_list = _orig_get_app_list(request, app_label=app_label)
+        if _orig_supports_app_label:
+            app_list = _orig_get_app_list(request, app_label=app_label)
+        else:
+            app_list = _orig_get_app_list(request)
         if app_label is None or app_label == "celery_monitor":
             dashboard_url = reverse(f"{site.name}:celery_monitor_dashboard")
             execution_stats_url = reverse(

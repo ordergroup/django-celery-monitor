@@ -4,7 +4,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "django-celery-monitor"
-version = "0.1.5"
+version = "0.1.6"
 description = "Django app for admin-based Celery task monitoring"
 requires-python = ">=3.10"
 classifiers = [
@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "celery>=5",
-  "django>=4.2",
+  "django>=3.2",
 ]
 
 optional-dependencies.results = [
