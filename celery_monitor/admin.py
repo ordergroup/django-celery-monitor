@@ -163,6 +163,11 @@ def dashboard_view(request: HttpRequest, site: AdminSite):
 
 
 def task_detail_view(request: HttpRequest, site: AdminSite, task_id: int):
+    if not has_django_celery_result():
+        from django.http import HttpResponseNotFound
+
+        return HttpResponseNotFound("django-celery-results is not installed")
+
     from django_celery_results.models import TaskResult
 
     task = TaskResult.objects.get(task_id=task_id)
