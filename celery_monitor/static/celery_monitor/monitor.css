@@ -18,51 +18,43 @@
 .status-badge.RECEIVED { background: #e8daef; color: #4a235a; }
 
 /* Dark mode support: Django Unfold, Django 4.2+ admin, or OS preference */
-.celery-monitor-dark .status-badge.SUCCESS,
-html.dark .status-badge.SUCCESS,
-html[data-theme="dark"] .status-badge.SUCCESS {
+.dark .status-badge.SUCCESS,
+[data-theme="dark"] .status-badge.SUCCESS {
   background: #1b4332;
   color: #95d5b2;
 }
-.celery-monitor-dark .status-badge.FAILURE,
-html.dark .status-badge.FAILURE,
-html[data-theme="dark"] .status-badge.FAILURE {
+.dark .status-badge.FAILURE,
+[data-theme="dark"] .status-badge.FAILURE {
   background: #4a1520;
   color: #f5a3b0;
 }
-.celery-monitor-dark .status-badge.STARTED,
-html.dark .status-badge.STARTED,
-html[data-theme="dark"] .status-badge.STARTED {
+.dark .status-badge.STARTED,
+[data-theme="dark"] .status-badge.STARTED {
   background: #0a2540;
   color: #90caf9;
 }
-.celery-monitor-dark .status-badge.PENDING,
-html.dark .status-badge.PENDING,
-html[data-theme="dark"] .status-badge.PENDING {
+.dark .status-badge.PENDING,
+[data-theme="dark"] .status-badge.PENDING {
   background: #3e2f0a;
   color: #ffd54f;
 }
-.celery-monitor-dark .status-badge.RETRY,
-html.dark .status-badge.RETRY,
-html[data-theme="dark"] .status-badge.RETRY {
+.dark .status-badge.RETRY,
+[data-theme="dark"] .status-badge.RETRY {
   background: #3e2510;
   color: #ffb74d;
 }
-.celery-monitor-dark .status-badge.REVOKED,
-html.dark .status-badge.REVOKED,
-html[data-theme="dark"] .status-badge.REVOKED {
+.dark .status-badge.REVOKED,
+[data-theme="dark"] .status-badge.REVOKED {
   background: #2c2c2c;
   color: #aaa;
 }
-.celery-monitor-dark .status-badge.PROGRESS,
-html.dark .status-badge.PROGRESS,
-html[data-theme="dark"] .status-badge.PROGRESS {
+.dark .status-badge.PROGRESS,
+[data-theme="dark"] .status-badge.PROGRESS {
   background: #0a3040;
   color: #80deea;
 }
-.celery-monitor-dark .status-badge.RECEIVED,
-html.dark .status-badge.RECEIVED,
-html[data-theme="dark"] .status-badge.RECEIVED {
+.dark .status-badge.RECEIVED,
+[data-theme="dark"] .status-badge.RECEIVED {
   background: #2d1845;
   color: #ce93d8;
 }
@@ -135,9 +127,8 @@ html[data-theme="dark"] .status-badge.RECEIVED {
   background: #f0f9ff;
   border-left-width: 6px;
 }
-.celery-monitor-dark .worker-card.has-active-tasks,
-html.dark .worker-card.has-active-tasks,
-html[data-theme="dark"] .worker-card.has-active-tasks {
+.dark .worker-card.has-active-tasks,
+[data-theme="dark"] .worker-card.has-active-tasks {
   background: #1e3a5f;
 }
 
@@ -198,15 +189,13 @@ html[data-theme="dark"] .worker-card.has-active-tasks {
   color: var(--body-quiet-color, #999);
 }
 
-.celery-monitor-dark .worker-card .status-badge.online,
-html.dark .worker-card .status-badge.online,
-html[data-theme="dark"] .worker-card .status-badge.online {
+.dark .worker-card .status-badge.online,
+[data-theme="dark"] .worker-card .status-badge.online {
   background: #1b4332;
   color: #95d5b2;
 }
-.celery-monitor-dark .worker-card .status-badge.offline,
-html.dark .worker-card .status-badge.offline,
-html[data-theme="dark"] .worker-card .status-badge.offline {
+.dark .worker-card .status-badge.offline,
+[data-theme="dark"] .worker-card .status-badge.offline {
   background: #4a1520;
   color: #f5a3b0;
 }
