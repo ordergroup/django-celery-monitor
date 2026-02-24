@@ -44,4 +44,3 @@ def get_signals_backend(app: Celery) -> SignalsResultBackend:
         return RedisSignalsResultBackend(app)
 
     return NoopSignalsResultBackend(app)
-
