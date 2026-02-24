@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from django.db import models
 
@@ -63,7 +64,7 @@ class RecentTask:
     worker: str | None
     date_started: str | None
     date_done: str | None
-    execution_time: float | None  # in seconds
+    execution_time: float | None
 
 
 @dataclass
@@ -71,3 +72,22 @@ class RecentTasksData:
     recent_tasks: list[RecentTask]
     task_names: list[str]
     workers: list[str]
+
+
+@dataclass
+class TaskDetail:
+    task_id: str
+    task_name: str | None
+    status: str
+    worker: str | None
+    date_created: str | None
+    date_started: str | None
+    date_done: str | None
+    task_args: list | None
+    task_kwargs: dict | None
+    result: dict | None
+    traceback: str | None
+    periodic_task_name: str | None
+    meta: Any | None
+    exception_type: str | None
+    exception: str | None

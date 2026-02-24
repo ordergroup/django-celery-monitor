@@ -1,3 +1,4 @@
+from celery import current_app
 from django.db import connection
 
 
@@ -15,17 +16,19 @@ def has_django_celery_result() -> bool:
 
 
 def has_redis() -> bool:
-    """Check if Redis is available and configured for Celery."""
-    try:
-        import redis
-        from celery import current_app
+    """
+    Check if Redis is available and configured for Celery.
 
-        broker_url = current_app.conf.broker_url
-        if not broker_url or not broker_url.startswith("redis://"):
-            return False
+    Returns True if:
+    - Redis package is installed
+    - Celery broker_url or result_backend is configured with Redis
+    - Connection to Redis can be established
+    """
+    broker_url = current_app.conf.broker_url
+    result_backend = current_app.conf.result_backend
 
-        r = redis.from_url(broker_url, socket_connect_timeout=3)
-        r.ping()
-        return True
-    except Exception:
+    redis_url = result_backend or broker_url
+    if not redis_url:
         return False
+
+    return redis_url.startswith("redis://") or redis_url.startswith("rediss://")

@@ -5,6 +5,7 @@ from celery import current_app
 from celery_monitor.models import (
     DashboardStatusCount,
     RecentTasksData,
+    TaskDetail,
     TaskExecutionStats,
     WorkerStats,
 )
@@ -94,3 +95,6 @@ class CeleryResultsMonitor:
         limit: int = 50,
     ) -> RecentTasksData:
         return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+
+    def get_task_detail(self, task_id: str) -> TaskDetail | None:
+        return None

@@ -29,8 +29,6 @@ function toggleAccordion(id) {
 {% endblock %}
 
 {% block content %}
-{% has_celery_results as celery_results_installed %}
-{% has_redis_broker as redis_available %}
 
 <div>
   <h2 class="section-title">Workers</h2>
@@ -50,12 +48,12 @@ function toggleAccordion(id) {
 </div>
 
 <div>
-  <h2 class="section-title">Overall Stats (django-celery-results)</h2>
+  <h2 class="section-title">Overall Stats</h2>
   <div hx-get="{% url 'admin:celery_monitor_statuses_overall_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
 </div>
 
 <div>
-  <h2 class="section-title">Last Hour (django-celery-results)</h2>
+  <h2 class="section-title">Last Hour</h2>
   <div hx-get="{% url 'admin:celery_monitor_statuses_last_hour_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
 </div>
 

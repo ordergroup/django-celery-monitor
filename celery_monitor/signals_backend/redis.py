@@ -1,0 +1,160 @@
+import json
+import logging
+from datetime import timedelta
+
+from celery import Celery
+from django.conf import settings
+from django.utils import timezone
+
+from celery_monitor.signals_backend.base import SignalsResultBackend
+
+logger = logging.getLogger(__name__)
+
+
+class RedisSignalsResultBackend(SignalsResultBackend):
+    def __init__(self, app: Celery):
+        self.app = app
+        self.task_data_ttl = getattr(
+            settings, "DJANGO_CELERY_MONITOR_TASK_DATA_TTL", 7 * 24 * 60 * 60
+        )
+        self.redis_client = self._get_redis_client()
+
+    def task_prerun_handler(
+        self, sender=None, task_id=None, task=None, args=None, kwargs=None, **kw
+    ):
+        now = timezone.now()
+
+        worker = "unknown"
+        if hasattr(task, "request") and task.request:
+            worker = task.request.hostname or "unknown"
+
+        if worker == "unknown":
+            worker = kw.get("hostname", "unknown")
+
+        task_args_str = json.dumps(args) if args else None
+        task_kwargs_str = json.dumps(kwargs) if kwargs else None
+
+        task_data = {
+            "task_id": task_id,
+            "task_name": task.name,
+            "status": "STARTED",
+            "worker": worker,
+            "date_created": str(now.timestamp()),
+            "date_started": str(now.timestamp()),
+        }
+
+        if task_args_str:
+            task_data["task_args"] = task_args_str
+        if task_kwargs_str:
+            task_data["task_kwargs"] = task_kwargs_str
+
+        pipeline = self.redis_client.pipeline()
+
+        pipeline.hset(f"celery:monitor:tasks:{task_id}", mapping=task_data)
+        pipeline.zadd("celery:monitor:tasks:recent", {task_id: now.timestamp()})
+        pipeline.sadd("celery:monitor:task_names", task.name)
+        pipeline.sadd("celery:monitor:workers", worker)
+        pipeline.hincrby("celery:monitor:status_counts", "STARTED", 1)
+
+        pipeline.expire(f"celery:monitor:tasks:{task_id}", self.task_data_ttl)
+
+        cutoff = now - timedelta(seconds=self.task_data_ttl)
+        pipeline.zremrangebyscore("celery:monitor:tasks:recent", 0, cutoff.timestamp())
+
+        pipeline.execute()
+
+    def task_postrun_handler(
+        self, sender=None, task_id=None, task=None, state=None, retval=None, **kwargs
+    ):
+        now = timezone.now()
+
+        update_data = {
+            "status": state,
+            "date_done": str(now.timestamp()),
+        }
+
+        if retval is not None:
+            import json
+
+            try:
+                result_str = json.dumps(retval)
+                update_data["result"] = result_str
+            except (TypeError, ValueError):
+                # If not serializable, store string representation
+                update_data["result"] = str(retval)
+
+        task_data = self.redis_client.hgetall(f"celery:monitor:tasks:{task_id}")
+        previous_status = task_data.get("status") if task_data else None
+
+        pipeline = self.redis_client.pipeline()
+
+        pipeline.hset(f"celery:monitor:tasks:{task_id}", mapping=update_data)
+
+        if previous_status and previous_status != state:
+            pipeline.hincrby("celery:monitor:status_counts", previous_status, -1)
+
+        pipeline.hincrby("celery:monitor:status_counts", state, 1)
+        pipeline.expire(f"celery:monitor:tasks:{task_id}", self.task_data_ttl)
+        pipeline.execute()
+
+    def task_failure_handler(self, sender=None, task_id=None, exception=None, **kwargs):
+        exception_info = {
+            "exception": str(exception),
+            "exception_type": type(exception).__name__,
+        }
+
+        pipeline = self.redis_client.pipeline()
+        pipeline.hset(f"celery:monitor:tasks:{task_id}", mapping=exception_info)
+        pipeline.execute()
+
+    def task_retry_handler(self, sender=None, task_id=None, reason=None, **kwargs):
+        pipeline = self.redis_client.pipeline()
+        pipeline.hset(f"celery:monitor:tasks:{task_id}", "status", "RETRY")
+
+        if reason:
+            pipeline.hset(
+                f"celery:monitor:tasks:{task_id}", "retry_reason", str(reason)
+            )
+
+        pipeline.hincrby(f"celery:monitor:tasks:{task_id}", "retry_count", 1)
+        pipeline.execute()
+
+    def task_revoked_handler(
+        self, sender=None, request=None, terminated=None, **kwargs
+    ):
+        task_id = request.id if request else None
+        if not task_id:
+            return
+
+        now = timezone.now()
+
+        update_data = {
+            "status": "REVOKED",
+            "date_done": str(now.timestamp()),
+            "terminated": str(terminated),
+        }
+
+        task_data = self.redis_client.hgetall(f"celery:monitor:tasks:{task_id}")
+        previous_status = task_data.get("status") if task_data else None
+
+        pipeline = self.redis_client.pipeline()
+        pipeline.hset(f"celery:monitor:tasks:{task_id}", mapping=update_data)
+
+        if previous_status and previous_status != "REVOKED":
+            pipeline.hincrby("celery:monitor:status_counts", previous_status, -1)
+
+        pipeline.hincrby("celery:monitor:status_counts", "REVOKED", 1)
+
+        pipeline.execute()
+
+    def _get_redis_client(self):
+        try:
+            import redis
+
+            redis_url = self.app.conf.result_backend or self.app.conf.broker_url
+            return redis.from_url(
+                redis_url, decode_responses=True, socket_connect_timeout=3
+            )
+        except Exception as e:
+            logger.warning("Could not connect to Redis for monitoring: %s", e)
+            return None
