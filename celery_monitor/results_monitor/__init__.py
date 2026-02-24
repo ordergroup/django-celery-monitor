@@ -1,5 +1,6 @@
 from django.conf import settings
 
+from celery_monitor.enums import BackendType
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.utils import has_django_celery_result, has_redis
 
@@ -8,31 +9,29 @@ def get_results_monitor() -> CeleryResultsMonitor:
     """
     Factory function that returns the appropriate results monitor based on available backends.
 
+    The backend selection is controlled by the CELERY_MONITOR_RESULTS_BACKEND setting,
+    which can be set to "celery_results", "redis", or left unset for automatic detection.
+
     Priority order:
-    1. Redis - when DJANGO_CELERY_MONITOR_FORCE_REDIS is set to True
-    2. Django Celery Results (if installed) - uses database backend
-    3. Redis (if configured)
-    4. Base monitor - limited functionality (only live worker stats)
+    1. Django Celery Results - when CELERY_MONITOR_RESULTS_BACKEND is "celery_results"
+       or "unknown" and django-celery-results is installed
+    2. Redis - when CELERY_MONITOR_RESULTS_BACKEND is "redis" or "unknown" and Redis is configured
+    3. Base monitor - fallback with limited functionality (only live worker stats)
 
-    For Redis monitoring to work, you must set up the signal handlers in your Celery app:
-        from celery_monitor.signals import setup_celery_monitor_signals
-        setup_celery_monitor_signals(app)
+    Returns:
+        CeleryResultsMonitor: The appropriate monitor implementation based on available backends
+
+    Settings:
+        CELERY_MONITOR_RESULTS_BACKEND: str - Backend type ("celery_results", "redis", or unset)
     """
-    force_redis = getattr(settings, "DJANGO_CELERY_MONITOR_FORCE_REDIS", False)
+    results_backend = BackendType.from_str(
+        getattr(settings, "CELERY_MONITOR_RESULTS_BACKEND", "unknown")
+    )
 
-    # Use Redis if forced or as fallback
-    if (force_redis or not has_django_celery_result()) and has_redis():
-        from celery_monitor.results_monitor.redis_custom_mixin import (
-            RedisCustomResultsMixin,
-        )
-
-        class RedisResultsMonitor(RedisCustomResultsMixin, CeleryResultsMonitor):
-            pass
-
-        return RedisResultsMonitor()
-
-    # Prefer django-celery-results if available
-    if has_django_celery_result():
+    if (
+        results_backend in (BackendType.CELERY_RESULTS, BackendType.UNKNOWN)
+        and has_django_celery_result()
+    ):
         from celery_monitor.results_monitor.celery_results_mixin import (
             CeleryResultsMixin,
         )
@@ -41,6 +40,16 @@ def get_results_monitor() -> CeleryResultsMonitor:
             pass
 
         return EnhancedResultsMonitor()
+
+    elif results_backend in (BackendType.REDIS, BackendType.UNKNOWN) and has_redis():
+        from celery_monitor.results_monitor.redis_custom_mixin import (
+            RedisCustomResultsMixin,
+        )
+
+        class RedisResultsMonitor(RedisCustomResultsMixin, CeleryResultsMonitor):
+            pass
+
+        return RedisResultsMonitor()
 
     # Default: use base monitor (limited functionality)
     return CeleryResultsMonitor()

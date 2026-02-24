@@ -128,12 +128,23 @@ If neither django-celery-results nor Redis is configured, the monitor will still
 
 ## Backend Selection Priority
 
-The monitor automatically detects and uses the best available backend:
+The monitor automatically detects and uses the best available backend. You can control this with the `CELERY_MONITOR_RESULTS_BACKEND` setting:
 
-1. **Redis** when `DJANGO_CELERY_MONITOR_FORCE_REDIS` is set to True
-2. **Django Celery Results** (if installed)
-3. **Redis** (if configured)
-4. **Base** (fallback)
+```python
+# settings.py
+
+# Explicitly set the backend (optional)
+CELERY_MONITOR_RESULTS_BACKEND = "celery_results"  # Use django-celery-results
+# or
+CELERY_MONITOR_RESULTS_BACKEND = "redis"  # Use Redis custom backend
+# or leave unset for automatic detection
+```
+
+**Automatic Detection Priority (when `CELERY_MONITOR_RESULTS_BACKEND` is not set):**
+
+1. **Django Celery Results** (if `django-celery-results` is installed)
+2. **Redis** (if Redis is configured in `CELERY_BROKER_URL` or `CELERY_RESULT_BACKEND`)
+3. **Base** (fallback with limited functionality)
 
 ## Optional: PostgreSQL Optimization
 
@@ -207,3 +218,4 @@ uv run ruff format celery_monitor tests
 # Check formatting without changes
 uv run ruff format --check celery_monitor tests
 ```
+
