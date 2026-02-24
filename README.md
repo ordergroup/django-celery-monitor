@@ -89,6 +89,14 @@ Configure Celery to use it as the result backend:
 # celery.py
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_TASK_TRACK_STARTED = True  # Enable execution time tracking
+
+
+# you can also use django-db as your celery backend but still use
+# redis for celery monitor purposes
+CELERY_MONITOR_RESULTS_BACKEND = "redis"
+# or
+CELERY_MONITOR_RESULTS_BACKEND = "celery_results"
+# or just dont set it, it will use celery_results by default in such case.
 ```
 
 Run migrations:
@@ -108,6 +116,9 @@ For monitoring without requiring django-celery-results, you can use Redis with a
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 # or
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/1'
+
+# set this if you have `django-celery-results` installed and want to use redis as celery monitor backend
+CELERY_MONITOR_RESULTS_BACKEND = "redis"
 ```
 
 `CELERY_RESULT_BACKEND` has priority over `CELERY_BROKER_URL`, so you can use different databas for backend.
