@@ -9,6 +9,7 @@ class CeleryMonitorConfig(AppConfig):
     def ready(self):
         from django.contrib import admin
 
+        from . import signals  # noqa
         from .admin import patch_admin_site
 
         patch_admin_site(admin.site)

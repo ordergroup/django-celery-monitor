@@ -60,9 +60,13 @@ Start your Django development server and navigate to:
 http://localhost:8000/admin/celery_monitor/
 ```
 
-## Optional: Django Celery Results Integration
+## Backend Options
 
-For enhanced monitoring with task history and execution statistics, install `django-celery-results`:
+Django Celery Monitor supports multiple backends for storing task execution data. Choose the one that best fits your infrastructure:
+
+### Option 1: Django Celery Results
+
+For persistent task history and execution statistics with database storage:
 
 ```bash
 pip install django-celery-results
@@ -84,6 +88,7 @@ Configure Celery to use it as the result backend:
 ```python
 # celery.py
 CELERY_RESULT_BACKEND = 'django-db'
+CELERY_TASK_TRACK_STARTED = True  # Enable execution time tracking
 ```
 
 Run migrations:
@@ -92,16 +97,43 @@ Run migrations:
 python manage.py migrate django_celery_results
 ```
 
-### Enable Task Execution Time Tracking
+### Option 2: Redis Backend
 
-To see execution times in the dashboard, enable task start time tracking:
+For monitoring without requiring django-celery-results, you can use Redis with a custom monitoring schema:
+
+**Step 1: Configure Celery with Redis**
 
 ```python
 # settings.py or celery.py
-CELERY_TASK_TRACK_STARTED = True
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# or
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/1'
 ```
 
-After adding this setting, restart your Celery workers. New tasks will now display execution times in the "Recent Tasks" section.
+`CELERY_RESULT_BACKEND` has priority over `CELERY_BROKER_URL`, so you can use different databas for backend.
+
+**Configuration Options:**
+
+```python
+# settings.py
+
+# Optional: Customize how long task data is kept in Redis (in seconds)
+# Default: 7 days (604800 seconds)
+DJANGO_CELERY_MONITOR_TASK_DATA_TTL = 7 * 24 * 60 * 60
+```
+
+### Option 3: Base Monitor (No Additional Backend)
+
+If neither django-celery-results nor Redis is configured, the monitor will still work with limited functionality.
+
+## Backend Selection Priority
+
+The monitor automatically detects and uses the best available backend:
+
+1. **Redis** when `DJANGO_CELERY_MONITOR_FORCE_REDIS` is set to True
+2. **Django Celery Results** (if installed)
+3. **Redis** (if configured)
+4. **Base** (fallback)
 
 ## Optional: PostgreSQL Optimization
 
@@ -175,5 +207,3 @@ uv run ruff format celery_monitor tests
 # Check formatting without changes
 uv run ruff format --check celery_monitor tests
 ```
-
-

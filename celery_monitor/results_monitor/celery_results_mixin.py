@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.db.models import Avg, Count, F, Max, Min, Q
 from django.utils import timezone
@@ -10,6 +10,7 @@ from celery_monitor.models import (
     DashboardStatusCount,
     RecentTask,
     RecentTasksData,
+    TaskDetail,
     TaskExecutionStats,
     WorkerStats,
 )
@@ -25,8 +26,6 @@ class CeleryResultsMixin:
                 DashboardStatusCount(row.status, row.count) for row in status_counts
             ]
         elif not self.is_postgres and self.has_django_celery_result:
-            from django_celery_results.models import TaskResult
-
             status_counts = (
                 TaskResult.objects.values("status")
                 .annotate(count=Count("id"))
@@ -96,8 +95,6 @@ class CeleryResultsMixin:
             queryset = TaskResult.objects.all()
 
             if date_from and date_to:
-                from datetime import datetime
-
                 try:
                     date_from_dt = datetime.fromisoformat(date_from)
                     date_to_dt = datetime.fromisoformat(date_to)
@@ -267,3 +264,32 @@ class CeleryResultsMixin:
         except Exception as e:
             logger.exception("Error getting recent tasks: %s", e)
             return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+
+    def get_task_detail(self, task_id: str) -> TaskDetail | None:
+        """Get detailed information about a specific task from django-celery-results."""
+
+        try:
+            task_result = TaskResult.objects.get(task_id=task_id)
+            return TaskDetail(
+                task_id=task_result.task_id,
+                task_name=task_result.task_name,
+                status=task_result.status,
+                worker=task_result.worker,
+                date_started=task_result.date_started,
+                date_created=task_result.date_created,
+                date_done=task_result.date_done,
+                task_args=task_result.task_args,
+                task_kwargs=task_result.task_kwargs,
+                result=task_result.result,
+                traceback=task_result.traceback,
+                meta=task_result.meta,
+                periodic_task_name=None,
+                exception=None,
+                exception_type=None,
+            )
+
+        except TaskResult.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.exception("Error getting task detail: %s", e)
+            return None
