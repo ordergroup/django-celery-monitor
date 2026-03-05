@@ -17,6 +17,15 @@
 .status-badge.PROGRESS { background: #d1ecf1; color: #0c5460; }
 .status-badge.RECEIVED { background: #e8daef; color: #4a235a; }
 
+.dark .status-badge.SUCCESS,  [data-theme="dark"] .status-badge.SUCCESS  { background: #1b4332; color: #95d5b2; }
+.dark .status-badge.FAILURE,  [data-theme="dark"] .status-badge.FAILURE  { background: #4a1520; color: #f5a3b0; }
+.dark .status-badge.STARTED,  [data-theme="dark"] .status-badge.STARTED  { background: #0a2540; color: #90caf9; }
+.dark .status-badge.PENDING,  [data-theme="dark"] .status-badge.PENDING  { background: #3e2f0a; color: #ffd54f; }
+.dark .status-badge.RETRY,    [data-theme="dark"] .status-badge.RETRY    { background: #3e2510; color: #ffb74d; }
+.dark .status-badge.REVOKED,  [data-theme="dark"] .status-badge.REVOKED  { background: #2c2c2c; color: #aaa; }
+.dark .status-badge.PROGRESS, [data-theme="dark"] .status-badge.PROGRESS { background: #0a3040; color: #80deea; }
+.dark .status-badge.RECEIVED, [data-theme="dark"] .status-badge.RECEIVED { background: #2d1845; color: #ce93d8; }
+
 @media (prefers-color-scheme: dark) {
   .status-badge.SUCCESS  { background: #1b4332; color: #95d5b2; }
   .status-badge.FAILURE  { background: #4a1520; color: #f5a3b0; }
@@ -39,6 +48,10 @@
   color: var(--body-fg, #333);
 }
 .section-title:first-of-type { margin-top: 0; }
+.dark .section-title,
+[data-theme="dark"] .section-title {
+  color: rgb(228 228 231);
+}
 
 /* ── Queue sections ───────────────────────────────────────── */
 
@@ -55,6 +68,11 @@
   color: var(--body-fg, #333);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.dark .queue-section-title,
+[data-theme="dark"] .queue-section-title {
+  background: rgb(39 39 42);
+  color: rgb(228 228 231);
 }
 .queue-section .stats-grid {
   margin-bottom: 0;
@@ -85,6 +103,18 @@
   background: #f0f9ff;
   border-left-width: 6px;
 }
+.dark .worker-card,
+[data-theme="dark"] .worker-card {
+  background: rgb(39 39 42);
+  border-color: rgb(63 63 70);
+}
+.dark .worker-card.online,  [data-theme="dark"] .worker-card.online  { border-left-color: #28a745; }
+.dark .worker-card.offline, [data-theme="dark"] .worker-card.offline { border-left-color: #dc3545; }
+.dark .worker-card.has-active-tasks,
+[data-theme="dark"] .worker-card.has-active-tasks {
+  background: #1e3a5f;
+}
+
 @media (prefers-color-scheme: dark) {
   .worker-card.has-active-tasks {
     background: #1e3a5f;
@@ -142,6 +172,38 @@
   color: var(--body-quiet-color, #999);
 }
 
+.dark .worker-name,
+[data-theme="dark"] .worker-name {
+  color: rgb(228 228 231);
+}
+.dark .worker-header,
+[data-theme="dark"] .worker-header {
+  border-bottom-color: rgb(63 63 70);
+}
+.dark .worker-details .label,
+[data-theme="dark"] .worker-details .label {
+  color: rgb(161 161 170);
+}
+.dark .worker-details .value,
+[data-theme="dark"] .worker-details .value {
+  color: rgb(228 228 231);
+}
+.dark .worker-details .value.idle,
+[data-theme="dark"] .worker-details .value.idle {
+  color: rgb(113 113 122);
+}
+
+.dark .worker-card .status-badge.online,
+[data-theme="dark"] .worker-card .status-badge.online {
+  background: #1b4332;
+  color: #95d5b2;
+}
+.dark .worker-card .status-badge.offline,
+[data-theme="dark"] .worker-card .status-badge.offline {
+  background: #4a1520;
+  color: #f5a3b0;
+}
+
 @media (prefers-color-scheme: dark) {
   .worker-card .status-badge.online {
     background: #1b4332;
@@ -190,6 +252,29 @@
 .stat-card.queue   { border-left: 4px solid var(--header-bg, #417690); }
 .stat-card.task-type { border-left: 4px solid #6f42c1; }
 
+.dark .stat-card,
+[data-theme="dark"] .stat-card {
+  background: rgb(39 39 42);
+  border-color: rgb(63 63 70);
+}
+.dark .stat-card.success, [data-theme="dark"] .stat-card.success { border-left-color: #28a745; }
+.dark .stat-card.failure, [data-theme="dark"] .stat-card.failure { border-left-color: #dc3545; }
+.dark .stat-card.started, [data-theme="dark"] .stat-card.started { border-left-color: #007bff; }
+.dark .stat-card.pending, [data-theme="dark"] .stat-card.pending { border-left-color: #ffc107; }
+.dark .stat-card.retry,   [data-theme="dark"] .stat-card.retry   { border-left-color: #fd7e14; }
+.dark .stat-card.revoked, [data-theme="dark"] .stat-card.revoked { border-left-color: #6c757d; }
+.dark .stat-card.total,   [data-theme="dark"] .stat-card.total   { border-left-color: var(--header-bg, #417690); }
+.dark .stat-card.queue,   [data-theme="dark"] .stat-card.queue   { border-left-color: var(--header-bg, #417690); }
+.dark .stat-card.task-type, [data-theme="dark"] .stat-card.task-type { border-left-color: #6f42c1; }
+.dark .stat-card .count,
+[data-theme="dark"] .stat-card .count {
+  color: rgb(228 228 231);
+}
+.dark .stat-card .label,
+[data-theme="dark"] .stat-card .label {
+  color: rgb(161 161 170);
+}
+
 /* ── Filters ──────────────────────────────────────────────── */
 
 .filters {
@@ -237,6 +322,11 @@
   color: var(--body-fg, #333);
 }
 .filters .filter-group { display: flex; align-items: center; gap: 6px; }
+
+.dark .filters,
+[data-theme="dark"] .filters {
+  background: rgb(39 39 42);
+}
 
 /* ── Task table ───────────────────────────────────────────── */
 
@@ -387,6 +477,58 @@ table.task-execution-table .no-data {
   color: var(--body-quiet-color, #999);
 }
 
+/* ── Table dark mode ──────────────────────────────────────── */
+
+.dark table.task-table th,
+.dark table.task-types-table th,
+.dark table.task-execution-table th,
+[data-theme="dark"] table.task-table th,
+[data-theme="dark"] table.task-types-table th,
+[data-theme="dark"] table.task-execution-table th {
+  background: rgb(39 39 42);
+}
+
+.dark table.task-table th,
+.dark table.task-table td,
+.dark table.task-types-table th,
+.dark table.task-types-table td,
+.dark table.task-execution-table th,
+.dark table.task-execution-table td,
+[data-theme="dark"] table.task-table th,
+[data-theme="dark"] table.task-table td,
+[data-theme="dark"] table.task-types-table th,
+[data-theme="dark"] table.task-types-table td,
+[data-theme="dark"] table.task-execution-table th,
+[data-theme="dark"] table.task-execution-table td {
+  border-bottom-color: rgb(63 63 70);
+  color: rgb(228 228 231);
+}
+
+.dark table.task-types-table .task-name,
+[data-theme="dark"] table.task-types-table .task-name {
+  color: rgb(161 161 170);
+}
+
+.dark table.task-execution-table th a,
+[data-theme="dark"] table.task-execution-table th a {
+  color: rgb(228 228 231);
+}
+
+.dark table.task-table tr:hover,
+.dark table.task-types-table tbody tr:hover,
+.dark table.task-execution-table tbody tr:hover,
+[data-theme="dark"] table.task-table tr:hover,
+[data-theme="dark"] table.task-types-table tbody tr:hover,
+[data-theme="dark"] table.task-execution-table tbody tr:hover {
+  background: rgb(39 39 42);
+}
+
+.dark table.task-types-table .queue-name,
+[data-theme="dark"] table.task-types-table .queue-name {
+  background: rgb(39 39 42);
+}
+
+
 /* ── Detail grid (task detail page) ───────────────────────── */
 
 .detail-grid {
@@ -418,6 +560,19 @@ table.task-execution-table .no-data {
   border-bottom: none;
 }
 
+.dark .detail-grid .label,
+[data-theme="dark"] .detail-grid .label {
+  background: rgb(39 39 42);
+}
+
+.dark .detail-grid .label,
+.dark .detail-grid .value,
+[data-theme="dark"] .detail-grid .label,
+[data-theme="dark"] .detail-grid .value {
+  border-bottom-color: rgb(63 63 70);
+  color: rgb(228 228 231);
+}
+
 /* ── Code blocks ──────────────────────────────────────────── */
 
 pre.code-block {
@@ -432,6 +587,13 @@ pre.code-block {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.dark pre.code-block,
+[data-theme="dark"] pre.code-block {
+  background: rgb(24 24 27);
+  border-color: rgb(63 63 70);
+  color: rgb(228 228 231);
 }
 
 /* ── Back link ────────────────────────────────────────────── */
