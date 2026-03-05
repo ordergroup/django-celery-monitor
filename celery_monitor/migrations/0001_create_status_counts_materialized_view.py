@@ -5,8 +5,25 @@ def is_postgres(schema_editor):
     return schema_editor.connection.vendor == "postgresql"
 
 
+def table_exists(schema_editor, table_name):
+    return table_name in schema_editor.connection.introspection.table_names()
+
+
+def is_celery_results_backend():
+    from django.conf import settings
+
+    backend = getattr(settings, "CELERY_MONITOR_RESULTS_BACKEND", "unknown")
+    return backend in ("celery_results", "unknown")
+
+
 def create_materialized_view(apps, schema_editor):
     if not is_postgres(schema_editor):
+        return
+
+    if not is_celery_results_backend():
+        return
+
+    if not table_exists(schema_editor, "django_celery_results_taskresult"):
         return
 
     schema_editor.execute(
@@ -38,6 +55,9 @@ def create_refresh_function(apps, schema_editor):
     if not is_postgres(schema_editor):
         return
 
+    if not is_celery_results_backend():
+        return
+
     schema_editor.execute(
         """
         CREATE OR REPLACE FUNCTION refresh_celery_status_counts()
@@ -64,6 +84,12 @@ def create_trigger(apps, schema_editor):
     if not is_postgres(schema_editor):
         return
 
+    if not is_celery_results_backend():
+        return
+
+    if not table_exists(schema_editor, "django_celery_results_taskresult"):
+        return
+
     schema_editor.execute(
         """
         CREATE TRIGGER refresh_celery_status_counts_trigger
@@ -79,9 +105,12 @@ def drop_trigger(apps, schema_editor):
     if not is_postgres(schema_editor):
         return
 
+    if not table_exists(schema_editor, "django_celery_results_taskresult"):
+        return
+
     schema_editor.execute(
         """
-        DROP TRIGGER IF EXISTS refresh_celery_status_counts_trigger 
+        DROP TRIGGER IF EXISTS refresh_celery_status_counts_trigger
         ON django_celery_results_taskresult;
         """
     )
@@ -93,7 +122,8 @@ class Migration(migrations.Migration):
     # Check if django_celery_results is installed at migration time
     try:
         from django.apps import apps
-        if apps.is_installed('django_celery_results'):
+
+        if apps.is_installed("django_celery_results"):
             dependencies = [("django_celery_results", "__latest__")]
     except Exception:
         pass
@@ -115,4 +145,3 @@ class Migration(migrations.Migration):
             reverse_code=drop_trigger,
         ),
     ]
-
