@@ -20,14 +20,10 @@ def has_redis() -> bool:
     Check if Redis is available and configured for Celery.
 
     Returns True if:
-    - Redis package is installed
-    - Celery broker_url or result_backend is configured with Redis
-    - Connection to Redis can be established
+    - Celery broker_url is configured with Redis
     """
-    broker_url = current_app.conf.broker_url
-    result_backend = current_app.conf.result_backend
+    redis_url = current_app.conf.broker_url
 
-    redis_url = result_backend or broker_url
     if not redis_url:
         return False
 
