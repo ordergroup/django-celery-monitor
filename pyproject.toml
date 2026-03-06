@@ -29,6 +29,7 @@ dev = [
   "celery-types>=0.24",
   "django-celery-results>=2.5",
   "django-stubs>=5.2.9",
+  "djlint>=1.36.4",
   "factory-boy>=3.3.3",
   "fakeredis>=2.33",
   "pytest>=9.0.2",

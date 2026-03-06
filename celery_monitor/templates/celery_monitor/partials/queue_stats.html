@@ -1,30 +1,26 @@
 <div class="stats-grid">
-  {% for queue in queue_stats %}
-  <div class="stat-card {% if queue.queue_name == 'total' %}total{% else %}queue{% endif %}">
-    <span class="count">{{ queue.count }}</span>
-    <span class="label">{{ queue.queue_name|title }}</span>
-    {% if queue.queue_name == 'total' %}
-    <button class="clear-queue-btn"
-            hx-post="{% url 'admin:celery_monitor_clear_all_queues' %}"
-            hx-confirm="Clear all tasks from all queues?"
-            hx-on::after-request="htmx.trigger('#queue-stats', 'refresh')"
-            hx-swap="none">
-      Clear All
-    </button>
-    {% else %}
-    <button class="clear-queue-btn"
-            hx-post="{% url 'admin:celery_monitor_clear_queue' queue.queue_name %}"
-            hx-confirm="Clear all tasks from queue '{{ queue.queue_name }}'?"
-            hx-on::after-request="htmx.trigger('#queue-stats', 'refresh')"
-            hx-swap="none">
-      Clear
-    </button>
-    {% endif %}
-  </div>
-  {% empty %}
-  <div class="stat-card">
-    <span class="count">0</span>
-    <span class="label">No queues found</span>
-  </div>
-  {% endfor %}
+    {% for queue in queue_stats %}
+        <div class="stat-card {% if queue.queue_name == 'total' %}total{% else %}queue{% endif %}">
+            <span class="count">{{ queue.count }}</span>
+            <span class="label">{{ queue.queue_name|title }}</span>
+            {% if queue.queue_name == 'total' %}
+                <button class="clear-queue-btn"
+                        hx-post="{% url 'admin:celery_monitor_clear_all_queues' %}"
+                        hx-confirm="Clear all tasks from all queues?"
+                        hx-on::after-request="htmx.trigger('#queue-stats', 'refresh')"
+                        hx-swap="none">Clear All</button>
+            {% else %}
+                <button class="clear-queue-btn"
+                        hx-post="{% url 'admin:celery_monitor_clear_queue' queue.queue_name %}"
+                        hx-confirm="Clear all tasks from queue '{{ queue.queue_name }}'?"
+                        hx-on::after-request="htmx.trigger('#queue-stats', 'refresh')"
+                        hx-swap="none">Clear</button>
+            {% endif %}
+        </div>
+    {% empty %}
+        <div class="stat-card">
+            <span class="count">0</span>
+            <span class="label">No queues found</span>
+        </div>
+    {% endfor %}
 </div>
