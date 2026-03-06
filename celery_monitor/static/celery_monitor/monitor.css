@@ -249,7 +249,7 @@
 .stat-card.retry   { border-left: 4px solid #fd7e14; }
 .stat-card.revoked { border-left: 4px solid #6c757d; }
 .stat-card.total   { border-left: 4px solid var(--header-bg, #333); }
-.stat-card.queue   { border-left: 4px solid var(--header-bg, #417690); }
+.stat-card.queue   { border-left: 4px solid var(--header-bg, #417690); position: relative; }
 .stat-card.task-type { border-left: 4px solid #6f42c1; }
 
 .dark .stat-card,
@@ -594,6 +594,39 @@ pre.code-block {
   background: rgb(24 24 27);
   border-color: rgb(63 63 70);
   color: rgb(228 228 231);
+}
+
+/* ── Clear queue button ───────────────────────────────────── */
+
+.clear-queue-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #dc3545;
+  background: transparent;
+  border: 1px solid #dc3545;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.clear-queue-btn:hover {
+  background: #dc3545;
+  color: #fff;
+}
+.dark .clear-queue-btn,
+[data-theme="dark"] .clear-queue-btn {
+  color: #f5a3b0;
+  border-color: #f5a3b0;
+}
+.dark .clear-queue-btn:hover,
+[data-theme="dark"] .clear-queue-btn:hover {
+  background: #4a1520;
+  color: #f5a3b0;
 }
 
 /* ── Toggle switch ────────────────────────────────────────── */

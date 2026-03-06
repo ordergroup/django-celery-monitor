@@ -58,6 +58,18 @@ def patch_admin_site(site):
                 ),
                 name="celery_monitor_task_detail",
             ),
+            path(
+                "celery-monitor/queues/clear-all/",
+                site.admin_view(lambda req: views.clear_all_queues(req, site)),
+                name="celery_monitor_clear_all_queues",
+            ),
+            path(
+                "celery-monitor/queues/<str:queue_name>/clear/",
+                site.admin_view(
+                    lambda req, queue_name: views.clear_queue(req, site, queue_name)
+                ),
+                name="celery_monitor_clear_queue",
+            ),
         ]
         return custom_urls + _orig_get_urls()
 

@@ -1,6 +1,7 @@
 from django.contrib.admin import AdminSite
-from django.http import HttpRequest, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.template.response import TemplateResponse
+from django.views.decorators.http import require_POST
 
 from celery_monitor.queue_monitor import get_queue_monitor
 from celery_monitor.results_monitor import get_results_monitor
@@ -172,3 +173,18 @@ def task_detail_view(request: HttpRequest, site: AdminSite, task_id: str):
         "task": task,
     }
     return TemplateResponse(request, "celery_monitor/task_detail.html", context)
+
+
+@require_POST
+def clear_queue(request: HttpRequest, site: AdminSite, queue_name: str):
+    queue_monitor = get_queue_monitor()
+    queue_monitor.clear_queue(queue_name)
+    return HttpResponse(status=204)
+
+
+@require_POST
+def clear_all_queues(request: HttpRequest, site: AdminSite):
+    queue_monitor = get_queue_monitor()
+    for queue_name in queue_monitor.get_queue_names():
+        queue_monitor.clear_queue(queue_name)
+    return HttpResponse(status=204)

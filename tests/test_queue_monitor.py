@@ -256,6 +256,50 @@ class TestRedisMonitor:
         assert task_counts["tasks.multiply"] == 1
         assert len(task_counts) == 2
 
+    def test_clear_queue_removes_all_tasks(self, celery_app, fake_redis):
+        """Test that clear_queue deletes all tasks from the queue."""
+        fake_redis.rpush("celery", json.dumps({"task": "tasks.add"}))
+        fake_redis.rpush("celery", json.dumps({"task": "tasks.multiply"}))
+        assert fake_redis.llen("celery") == 2
+
+        monitor = RedisMonitor()
+        monitor.clear_queue("celery")
+
+        assert fake_redis.llen("celery") == 0
+
+    def test_clear_queue_only_affects_target_queue(
+        self, celery_app_with_queues, fake_redis
+    ):
+        """Test that clear_queue does not affect other queues."""
+        fake_redis.rpush("high_priority", json.dumps({"task": "tasks.urgent"}))
+        fake_redis.rpush("default", json.dumps({"task": "tasks.normal"}))
+
+        monitor = RedisMonitor()
+        monitor.clear_queue("high_priority")
+
+        assert fake_redis.llen("high_priority") == 0
+        assert fake_redis.llen("default") == 1
+
+    def test_clear_queue_on_empty_queue_is_noop(self, celery_app, fake_redis):
+        """Test that clear_queue on an empty queue raises no errors."""
+        monitor = RedisMonitor()
+        monitor.clear_queue("celery")  # should not raise
+        assert fake_redis.llen("celery") == 0
+
+    def test_clear_all_queues_via_base(self, celery_app_with_queues, fake_redis):
+        """Test clearing all queues by iterating get_queue_names."""
+        fake_redis.rpush("high_priority", json.dumps({"task": "tasks.urgent"}))
+        fake_redis.rpush("default", json.dumps({"task": "tasks.normal"}))
+        fake_redis.rpush("low_priority", json.dumps({"task": "tasks.batch"}))
+
+        monitor = RedisMonitor()
+        for queue_name in monitor.get_queue_names():
+            monitor.clear_queue(queue_name)
+
+        assert fake_redis.llen("high_priority") == 0
+        assert fake_redis.llen("default") == 0
+        assert fake_redis.llen("low_priority") == 0
+
 
 class TestGetQueueMonitor:
     """Tests for get_queue_monitor factory function."""
