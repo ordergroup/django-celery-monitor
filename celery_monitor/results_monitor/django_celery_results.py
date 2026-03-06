@@ -14,18 +14,25 @@ from celery_monitor.models import (
     TaskExecutionStats,
     WorkerStats,
 )
+from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
+from celery_monitor.utils import is_postgres
 
 logger = logging.getLogger(__name__)
 
 
-class CeleryResultsMixin:
+class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
+    def __init__(self):
+        self.is_postgres = is_postgres()
+        self.workers_monitor = WorkersCeleryResultsMonitor()
+
     def get_overall_status_counts(self) -> list[DashboardStatusCount]:
-        if self.is_postgres and self.has_django_celery_result:
+        if self.is_postgres:
             status_counts = CeleryStatusCount.objects.all().order_by("status")
             stats = [
                 DashboardStatusCount(row.status, row.count) for row in status_counts
             ]
-        elif not self.is_postgres and self.has_django_celery_result:
+        else:
             status_counts = (
                 TaskResult.objects.values("status")
                 .annotate(count=Count("id"))
@@ -35,8 +42,6 @@ class CeleryResultsMixin:
                 DashboardStatusCount(row["status"], row["count"])
                 for row in status_counts
             ]
-        else:
-            stats = []
 
         return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
@@ -54,8 +59,8 @@ class CeleryResultsMixin:
         ]
         return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
-    def get_worker_stats(self) -> list[WorkerStats]:
-        workers = super().get_worker_stats()
+    def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
+        workers = self.workers_monitor.get_worker_stats(include_offline)
         worker_names = {worker.name for worker in workers}
         try:
             day_ago = timezone.now() - timedelta(days=1)
@@ -67,7 +72,7 @@ class CeleryResultsMixin:
             )
 
             for worker_name in recent_workers:
-                if worker_name not in worker_names:
+                if include_offline and worker_name not in worker_names:
                     workers.append(
                         WorkerStats(
                             name=worker_name,

@@ -14,13 +14,16 @@ from celery_monitor.models import (
     RecentTasksData,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 
 HAS_CELERY_RESULTS = "django_celery_results" in settings.INSTALLED_APPS
 
 if HAS_CELERY_RESULTS:
     from django_celery_results.models import TaskResult
 
-    from celery_monitor.results_monitor.celery_results_mixin import CeleryResultsMixin
+    from celery_monitor.results_monitor.django_celery_results import (
+        DjangoCeleryResultsMonitor,
+    )
     from tests.factories import TaskResultFactory
 
 
@@ -28,49 +31,38 @@ class TestCeleryResultsMonitor:
     """Test the base CeleryResultsMonitor class."""
 
     def test_init(self):
-        """Test initialization of CeleryResultsMonitor."""
-        with (
-            patch("celery_monitor.results_monitor.base.is_postgres") as mock_postgres,
-            patch(
-                "celery_monitor.results_monitor.base.has_django_celery_result"
-            ) as mock_has_results,
-        ):
-            mock_postgres.return_value = True
-            mock_has_results.return_value = True
-
-            monitor = CeleryResultsMonitor()
-
-            assert monitor.is_postgres is True
-            assert monitor.has_django_celery_result is True
+        """Test instantiation of WorkersCeleryResultsMonitor."""
+        monitor = WorkersCeleryResultsMonitor()
+        assert isinstance(monitor, CeleryResultsMonitor)
 
     def test_get_overall_status_counts_empty(self):
         """Test get_overall_status_counts returns empty list by default."""
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_overall_status_counts()
         assert result == []
 
     def test_get_last_hour_status_counts_empty(self):
         """Test get_last_hour_status_counts returns empty list by default."""
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_last_hour_status_counts()
         assert result == []
 
     def test_get_task_execution_stats_empty(self):
         """Test get_task_execution_stats returns empty list by default."""
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_task_execution_stats()
         assert result == []
 
     def test_get_recent_tasks_empty(self):
         """Test get_recent_tasks returns empty data by default."""
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
         assert isinstance(result, RecentTasksData)
         assert result.recent_tasks == []
         assert result.task_names == []
         assert result.workers == []
 
-    @patch("celery_monitor.results_monitor.base.current_app")
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
     def test_get_worker_stats_with_online_workers(self, mock_app):
         """Test get_worker_stats with online workers."""
         mock_inspect = Mock()
@@ -88,7 +80,7 @@ class TestCeleryResultsMonitor:
         }
         mock_app.control.inspect.return_value = mock_inspect
 
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_worker_stats()
 
         assert len(result) == 2
@@ -101,7 +93,7 @@ class TestCeleryResultsMonitor:
         assert result[1].active_tasks == 0
         assert result[1].queues == ["celery"]
 
-    @patch("celery_monitor.results_monitor.base.current_app")
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
     def test_get_worker_stats_no_workers(self, mock_app):
         """Test get_worker_stats with no workers."""
         mock_inspect = Mock()
@@ -110,17 +102,17 @@ class TestCeleryResultsMonitor:
         mock_inspect.active_queues.return_value = None
         mock_app.control.inspect.return_value = mock_inspect
 
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_worker_stats()
 
         assert result == []
 
-    @patch("celery_monitor.results_monitor.base.current_app")
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
     def test_get_worker_stats_exception_handling(self, mock_app):
         """Test get_worker_stats handles exceptions gracefully."""
         mock_app.control.inspect.side_effect = Exception("Connection error")
 
-        monitor = CeleryResultsMonitor()
+        monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_worker_stats()
 
         assert result == []
@@ -129,7 +121,7 @@ class TestCeleryResultsMonitor:
 @pytest.mark.skipif(
     not HAS_CELERY_RESULTS, reason="django_celery_results not in INSTALLED_APPS"
 )
-class TestCeleryResultsMixin:
+class TestDjangoCeleryResultsMonitor:
     """Test the CeleryResultsMixin class.
 
     Note: These tests require django-celery-results to be installed.
@@ -144,11 +136,10 @@ class TestCeleryResultsMixin:
         TaskResultFactory.create_batch(2, status="FAILURE")
         TaskResultFactory.create_batch(1, status="PENDING")
 
-        mixin = CeleryResultsMixin()
-        mixin.is_postgres = False
-        mixin.has_django_celery_result = True
+        monitor = DjangoCeleryResultsMonitor()
+        monitor.is_postgres = False
 
-        result = mixin.get_overall_status_counts()
+        result = monitor.get_overall_status_counts()
 
         assert len(result) == 4  # total + SUCCESS + FAILURE + PENDING
         assert result[0].status == "total"
@@ -186,9 +177,9 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(hours=2),
             )
 
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
 
-        result = mixin.get_last_hour_status_counts()
+        result = monitor.get_last_hour_status_counts()
 
         assert len(result) == 3  # total + SUCCESS + FAILURE
         assert result[0].status == "total"
@@ -199,7 +190,7 @@ class TestCeleryResultsMixin:
         assert status_counts["FAILURE"] == 2
 
     @pytest.mark.django_db(transaction=True)
-    @patch("celery_monitor.results_monitor.base.current_app")
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
     def test_get_worker_stats_with_offline_workers(self, mock_app):
         """Test get_worker_stats includes offline workers from database."""
         # Create tasks with workers
@@ -215,16 +206,9 @@ class TestCeleryResultsMixin:
         mock_inspect.active_queues.return_value = {"worker1@host": [{"name": "celery"}]}
         mock_app.control.inspect.return_value = mock_inspect
 
-        # The mixin needs to be used properly by inheriting from the base class
-        # Create a test class that properly inherits
-        class TestMonitor(CeleryResultsMixin, CeleryResultsMonitor):
-            pass
+        monitor = DjangoCeleryResultsMonitor()
 
-        monitor = TestMonitor()
-        monitor.is_postgres = False
-        monitor.has_django_celery_result = True
-
-        result = monitor.get_worker_stats()
+        result = monitor.get_worker_stats(include_offline=True)
 
         assert len(result) == 2
         assert result[0].name == "worker1@host"
@@ -241,9 +225,9 @@ class TestCeleryResultsMixin:
         success_tasks = TaskResultFactory.create_batch(3, status="SUCCESS")
         TaskResultFactory.create_batch(2, status="FAILURE")
 
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
 
-        result = mixin.get_recent_tasks(status="SUCCESS")
+        result = monitor.get_recent_tasks(status="SUCCESS")
 
         assert isinstance(result, RecentTasksData)
         assert len(result.recent_tasks) == 3
@@ -266,8 +250,8 @@ class TestCeleryResultsMixin:
             date_done=end_time,
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks()
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks()
 
         assert len(result.recent_tasks) == 1
         assert result.recent_tasks[0].task_id == "test-task-123"
@@ -288,8 +272,8 @@ class TestCeleryResultsMixin:
             date_done=None,
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks()
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks()
 
         assert len(result.recent_tasks) == 1
         assert result.recent_tasks[0].task_id == "test-task-456"
@@ -302,8 +286,8 @@ class TestCeleryResultsMixin:
         TaskResultFactory(task_name="tasks.process", worker="worker2@host")
         TaskResultFactory(task_name="tasks.add", worker="worker1@host")  # duplicate
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks()
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks()
 
         assert len(result.task_names) == 2
         assert "tasks.add" in result.task_names
@@ -319,8 +303,8 @@ class TestCeleryResultsMixin:
         TaskResultFactory.create_batch(3, task_name="tasks.add")
         TaskResultFactory.create_batch(2, task_name="tasks.process")
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks(task_name="tasks.add")
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks(task_name="tasks.add")
 
         assert len(result.recent_tasks) == 3
         assert all(task.task_name == "tasks.add" for task in result.recent_tasks)
@@ -331,8 +315,8 @@ class TestCeleryResultsMixin:
         TaskResultFactory.create_batch(4, worker="worker1@host")
         TaskResultFactory.create_batch(2, worker="worker2@host")
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks(worker="worker1@host")
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks(worker="worker1@host")
 
         assert len(result.recent_tasks) == 4
         assert all(task.worker == "worker1@host" for task in result.recent_tasks)
@@ -342,8 +326,8 @@ class TestCeleryResultsMixin:
         """Test get_recent_tasks respects the limit parameter."""
         TaskResultFactory.create_batch(50, status="SUCCESS")
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_recent_tasks()
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_recent_tasks()
 
         # Default limit should be 50
         assert len(result.recent_tasks) <= 50
@@ -387,8 +371,8 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(minutes=30),
             )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 2
 
@@ -437,8 +421,8 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(hours=2),
             )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         assert result[0].task_name == "tasks.add"
@@ -447,12 +431,12 @@ class TestCeleryResultsMixin:
     @pytest.mark.django_db(transaction=True)
     def test_get_task_execution_stats_exception_handling(self):
         """Test get_task_execution_stats handles exceptions."""
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
 
         with patch.object(TaskResult.objects, "all") as mock_all:
             mock_all.side_effect = Exception("Database error")
 
-            result = mixin.get_task_execution_stats()
+            result = monitor.get_task_execution_stats()
 
             assert result == []
 
@@ -492,8 +476,8 @@ class TestCeleryResultsMixin:
             date_done=now - timedelta(minutes=30),
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         stats = result[0]
@@ -548,8 +532,8 @@ class TestCeleryResultsMixin:
             date_done=now - timedelta(minutes=30),
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         stats = result[0]
@@ -581,8 +565,8 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(minutes=30),
             )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         stats = result[0]
@@ -622,8 +606,8 @@ class TestCeleryResultsMixin:
             date_started=None,
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         stats = result[0]
@@ -660,8 +644,8 @@ class TestCeleryResultsMixin:
             date_done=now - timedelta(minutes=30),
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(
             hours=1, sort_by="min_runtime", sort_order="asc"
         )
 
@@ -669,7 +653,7 @@ class TestCeleryResultsMixin:
         assert result[0].task_name == "tasks.fast"
         assert result[1].task_name == "tasks.slow"
 
-        result_desc = mixin.get_task_execution_stats(
+        result_desc = monitor.get_task_execution_stats(
             hours=1, sort_by="min_runtime", sort_order="desc"
         )
         assert result_desc[0].task_name == "tasks.slow"
@@ -701,8 +685,8 @@ class TestCeleryResultsMixin:
             date_done=now - timedelta(minutes=30),
         )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(
             hours=1, sort_by="max_runtime", sort_order="asc"
         )
 
@@ -710,7 +694,7 @@ class TestCeleryResultsMixin:
         assert result[0].task_name == "tasks.fast"
         assert result[1].task_name == "tasks.slow"
 
-        result_desc = mixin.get_task_execution_stats(
+        result_desc = monitor.get_task_execution_stats(
             hours=1, sort_by="max_runtime", sort_order="desc"
         )
         assert result_desc[0].task_name == "tasks.slow"
@@ -734,8 +718,8 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(minutes=30),
             )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(hours=1)
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(hours=1)
 
         assert len(result) == 1
         stats = result[0]
@@ -781,11 +765,11 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(days=5),
             )
 
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
         date_from = (now - timedelta(days=3)).isoformat()
         date_to = (now - timedelta(days=1)).isoformat()
 
-        result = mixin.get_task_execution_stats(
+        result = monitor.get_task_execution_stats(
             hours=None, date_from=date_from, date_to=date_to
         )
 
@@ -810,11 +794,11 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(hours=6),
             )
 
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
         date_from = "2024-01-15T00:00:00"
         date_to = "2024-01-15T23:59:59"
 
-        result = mixin.get_task_execution_stats(
+        result = monitor.get_task_execution_stats(
             hours=None, date_from=date_from, date_to=date_to
         )
 
@@ -850,8 +834,8 @@ class TestCeleryResultsMixin:
                 date_done=now - timedelta(hours=5),
             )
 
-        mixin = CeleryResultsMixin()
-        result = mixin.get_task_execution_stats(
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_execution_stats(
             hours=1, date_from="invalid", date_to="invalid"
         )
 
@@ -885,11 +869,11 @@ class TestCeleryResultsMixin:
             date_done=now - timedelta(days=1),
         )
 
-        mixin = CeleryResultsMixin()
+        monitor = DjangoCeleryResultsMonitor()
         date_from = (now - timedelta(days=2)).isoformat()
         date_to = now.isoformat()
 
-        result = mixin.get_task_execution_stats(
+        result = monitor.get_task_execution_stats(
             hours=None,
             date_from=date_from,
             date_to=date_to,

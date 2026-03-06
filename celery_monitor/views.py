@@ -51,7 +51,8 @@ def redis_queue_task_types_view(request: HttpRequest):
 
 def worker_stats_view(request: HttpRequest):
     results_monitor = get_results_monitor()
-    worker_stats = results_monitor.get_worker_stats()
+    include_offline = request.GET.get("include_offline") == "true"
+    worker_stats = results_monitor.get_worker_stats(include_offline=include_offline)
     context = {"worker_stats": worker_stats}
     return TemplateResponse(
         request,

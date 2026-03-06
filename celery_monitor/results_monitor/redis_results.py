@@ -14,7 +14,10 @@ from celery_monitor.models import (
     RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    WorkerStats,
 )
+from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,7 @@ REDIS_SCHEME = "redis://"
 REDIS_SECURE_SCHEME = "rediss://"
 
 
-class RedisCustomResultsMixin:
+class RedisResultsMonitor(CeleryResultsMonitor):
     """
     Mixin that uses a custom Redis schema for efficient task monitoring.
 
@@ -44,6 +47,7 @@ class RedisCustomResultsMixin:
     def __init__(self):
         super().__init__()
         self._redis_client = None
+        self.workers_monitor = WorkersCeleryResultsMonitor()
 
     def _get_redis_client(self) -> redis.Redis | None:
         if self._redis_client is not None:
@@ -66,6 +70,9 @@ class RedisCustomResultsMixin:
         except Exception as e:
             logger.warning("Could not connect to Redis: %s", e)
             return None
+
+    def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
+        return self.workers_monitor.get_worker_stats(include_offline)
 
     def get_overall_status_counts(self) -> list[DashboardStatusCount]:
         client = self._get_redis_client()

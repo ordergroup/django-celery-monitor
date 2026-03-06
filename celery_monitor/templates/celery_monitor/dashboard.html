@@ -31,8 +31,20 @@ function toggleAccordion(id) {
 {% block content %}
 
 <div>
-  <h2 class="section-title">Workers</h2>
-  <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
+  <h2 class="section-title" style="display: flex; align-items: center; gap: 10px;">
+    Workers
+    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75em; font-weight: normal; cursor: pointer;">
+      <span class="toggle-switch">
+        <input type="checkbox" id="offline-toggle" name="include_offline" value="true">
+        <span class="toggle-slider"></span>
+      </span>
+      <span>Include offline</span>
+    </label>
+  </h2>
+  <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}"
+       hx-trigger="load, every 5s, change from:#offline-toggle"
+       hx-include="#offline-toggle"
+       hx-swap="innerHTML"></div>
 </div>
 
 <div>
