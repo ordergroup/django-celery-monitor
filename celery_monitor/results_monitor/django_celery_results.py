@@ -287,7 +287,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
             )
 
         except TaskResult.DoesNotExist:
-            return None
+            return self.workers_monitor.get_task_detail(task_id)
         except Exception as e:
             logger.exception("Error getting task detail: %s", e)
             return None
@@ -312,7 +312,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
             if worker:
                 qs = qs.filter(worker=worker)
             if date_from:
-                qs = qs.filter(date_done__lte=date_to)
+                qs = qs.filter(date_done__lte=date_from)
             if date_to:
                 qs = qs.filter(date_done__lte=date_to)
 

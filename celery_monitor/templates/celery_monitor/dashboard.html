@@ -23,10 +23,33 @@ function toggleAccordion(id) {
   if (element.style.display === 'none') {
     element.style.display = 'block';
     icon.textContent = '▼';
+    htmx.trigger(element, 'accordion-open');
   } else {
     element.style.display = 'none';
     icon.textContent = '▶';
   }
+}
+
+window._revokedTaskIds = new Set();
+
+function markTaskRevoked(btn, taskId) {
+  window._revokedTaskIds.add(taskId);
+  btn.disabled = true;
+  btn.textContent = 'Revoked';
+  btn.classList.remove('kill-btn--term');
+  btn.classList.add('kill-btn--revoked');
+}
+
+function applyRevokedStates() {
+  window._revokedTaskIds.forEach(id => {
+    const btn = document.querySelector('[data-task-id="' + id + '"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Revoked';
+      btn.classList.remove('kill-btn--term');
+      btn.classList.add('kill-btn--revoked');
+    }
+  });
 }
     </script>
 {% endblock %}
@@ -56,7 +79,25 @@ function toggleAccordion(id) {
         <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}"
              hx-trigger="load, every 5s, change from:#offline-toggle"
              hx-include="#offline-toggle"
-             hx-swap="innerHTML"></div>
+             hx-swap="innerHTML">
+            <p class="loading-indicator">Loading</p>
+        </div>
+    </div>
+    <div>
+        <h2 class="section-title"
+            style="cursor: pointer;
+                   user-select: none"
+            onclick="toggleAccordion('reserved-tasks-accordion')">
+            <span id="reserved-tasks-accordion-icon">▶</span> Reserved Tasks
+        </h2>
+        <div id="reserved-tasks-accordion"
+             style="display: none"
+             hx-get="{% url 'admin:celery_monitor_reserved_tasks' %}"
+             hx-trigger="accordion-open, every 5s [this.style.display !== 'none']"
+             hx-swap="innerHTML"
+             hx-on::after-swap="applyRevokedStates()">
+            <p class="loading-indicator">Loading</p>
+        </div>
     </div>
     <div>
         <h2 class="section-title">Redis Queue Stats</h2>
@@ -75,8 +116,10 @@ function toggleAccordion(id) {
         <div id="task-types-accordion"
              style="display: none"
              hx-get="{% url 'admin:celery_monitor_redis_queue_task_types' %}"
-             hx-trigger="load, every 5s"
-             hx-swap="innerHTML"></div>
+             hx-trigger="accordion-open, every 5s [this.style.display !== 'none']"
+             hx-swap="innerHTML">
+            <p class="loading-indicator">Loading</p>
+        </div>
     </div>
     <div>
         <h2 class="section-title">Overall Stats</h2>

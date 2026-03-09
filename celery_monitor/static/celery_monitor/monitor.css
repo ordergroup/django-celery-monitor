@@ -16,6 +16,7 @@
 .status-badge.REVOKED { background: #e2e3e5; color: #383d41; }
 .status-badge.PROGRESS { background: #d1ecf1; color: #0c5460; }
 .status-badge.RECEIVED { background: #e8daef; color: #4a235a; }
+.status-badge.RESERVED { background: #dde8f5; color: #1a3a5c; }
 
 .dark .status-badge.SUCCESS,  [data-theme="dark"] .status-badge.SUCCESS  { background: #1b4332; color: #95d5b2; }
 .dark .status-badge.FAILURE,  [data-theme="dark"] .status-badge.FAILURE  { background: #4a1520; color: #f5a3b0; }
@@ -25,6 +26,7 @@
 .dark .status-badge.REVOKED,  [data-theme="dark"] .status-badge.REVOKED  { background: #2c2c2c; color: #aaa; }
 .dark .status-badge.PROGRESS, [data-theme="dark"] .status-badge.PROGRESS { background: #0a3040; color: #80deea; }
 .dark .status-badge.RECEIVED, [data-theme="dark"] .status-badge.RECEIVED { background: #2d1845; color: #ce93d8; }
+.dark .status-badge.RESERVED, [data-theme="dark"] .status-badge.RESERVED { background: #0d2a45; color: #90b8e0; }
 
 @media (prefers-color-scheme: dark) {
   .status-badge.SUCCESS  { background: #1b4332; color: #95d5b2; }
@@ -35,6 +37,7 @@
   .status-badge.REVOKED  { background: #2c2c2c; color: #aaa; }
   .status-badge.PROGRESS { background: #0a3040; color: #80deea; }
   .status-badge.RECEIVED { background: #2d1845; color: #ce93d8; }
+  .status-badge.RESERVED { background: #0d2a45; color: #90b8e0; }
 }
 
 /* ── Section titles ───────────────────────────────────────── */
@@ -403,6 +406,7 @@ table.task-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  margin-bottom: 16px;
 }
 table.task-table th, table.task-table td {
   padding: 8px 12px;
@@ -482,6 +486,28 @@ table.task-types-table .task-count {
   padding: 24px;
   color: var(--body-quiet-color, #999);
   margin: 0;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 24px;
+  color: var(--body-quiet-color, #999);
+  margin: 0;
+}
+.loading-indicator::after {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 2px solid var(--body-quiet-color, #999);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: cm-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+@keyframes cm-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Task execution table ─────────────────────────────────── */
@@ -757,6 +783,18 @@ pre.code-block {
 [data-theme="dark"] .kill-btn--kill:hover {
   background: #4a1520;
   color: #f5a3b0;
+}
+
+.kill-btn--revoked {
+  color: #999;
+  background: transparent;
+  border-color: #999;
+  cursor: default;
+  opacity: 0.6;
+}
+.kill-btn--revoked:hover {
+  background: transparent;
+  color: #999;
 }
 
 /* ── Toggle switch ────────────────────────────────────────── */

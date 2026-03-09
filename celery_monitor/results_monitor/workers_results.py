@@ -32,7 +32,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         self, include_offline: bool | None = None
     ) -> list[WorkerStats]:
         try:
-            inspect = current_app.control.inspect(timeout=1.0)
+            inspect = current_app.control.inspect(timeout=0.5)
 
             # Get online workers using ping
             ping_response = inspect.ping()
@@ -40,6 +40,9 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
 
             # Get active tasks - this shows currently executing tasks
             active_workers = inspect.active()
+
+            # Get reserved (prefetched but not yet started) tasks
+            reserved_workers = inspect.reserved()
 
             # Get active queues for each worker
             active_queues = inspect.active_queues()
@@ -60,6 +63,10 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
 
                 active_count = len(active_tasks_list) if active_tasks_list else 0
 
+                reserved_count = 0
+                if reserved_workers and worker_name in reserved_workers:
+                    reserved_count = len(reserved_workers[worker_name])
+
                 # Get queues for this worker
                 queues = []
                 if active_queues and worker_name in active_queues:
@@ -73,6 +80,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
                         pool_size=None,
                         max_concurrency=None,
                         queues=queues if queues else None,
+                        reserved_tasks=reserved_count,
                     )
                 )
 
@@ -101,6 +109,31 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
 
     def get_task_detail(self, task_id: str) -> TaskDetail | None:
+        try:
+            inspect = current_app.control.inspect(timeout=1.0)
+            reserved = inspect.reserved() or {}
+            for worker_name, tasks in reserved.items():
+                for t in tasks:
+                    if t.get("id") == task_id:
+                        return TaskDetail(
+                            task_id=task_id,
+                            task_name=t.get("name"),
+                            status="RESERVED",
+                            worker=t.get("hostname") or worker_name,
+                            date_created=None,
+                            date_started=None,
+                            date_done=None,
+                            task_args=t.get("args"),
+                            task_kwargs=t.get("kwargs"),
+                            result=None,
+                            traceback=None,
+                            periodic_task_name=None,
+                            meta=None,
+                            exception_type=None,
+                            exception=None,
+                        )
+        except Exception as e:
+            logger.exception("Error looking up reserved task detail: %s", e)
         return None
 
     def get_tasks(

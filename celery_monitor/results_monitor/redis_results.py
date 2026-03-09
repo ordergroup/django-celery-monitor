@@ -309,7 +309,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
 
         task_data: dict = client.hgetall(f"celery:monitor:tasks:{task_id}")
         if not task_data:
-            return None
+            return self.workers_monitor.get_task_detail(task_id)
 
         # Convert timestamps to datetime objects for display
         date_started = get_timestamp(task_data, "date_started")

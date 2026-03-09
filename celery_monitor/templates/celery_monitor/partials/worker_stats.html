@@ -11,6 +11,10 @@
                         <span class="label">Active Tasks:</span>
                         <span class="value {% if worker.active_tasks > 0 %}active{% else %}idle{% endif %}">{{ worker.active_tasks }}</span>
                     </div>
+                    <div class="detail-row">
+                        <span class="label">Reserved:</span>
+                        <span class="value">{{ worker.reserved_tasks }}</span>
+                    </div>
                     {% if worker.max_concurrency %}
                         <div class="detail-row">
                             <span class="label">Concurrency:</span>

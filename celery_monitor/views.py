@@ -74,6 +74,27 @@ def worker_stats_view(request: HttpRequest):
     )
 
 
+def reserved_tasks_view(request: HttpRequest):
+    try:
+        inspect = current_app.control.inspect(timeout=1.0)
+        reserved = inspect.reserved() or {}
+    except Exception:
+        reserved = {}
+
+    # Flatten into a list of (worker, task) pairs sorted by worker name
+    reserved_tasks = [
+        {"worker": worker, **task}
+        for worker, tasks in sorted(reserved.items())
+        for task in tasks
+    ]
+    context = {"reserved_tasks": reserved_tasks}
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/reserved_tasks.html",
+        context,
+    )
+
+
 def recent_tasks_view(request: HttpRequest):
     filters = RecentTasksFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -190,4 +211,10 @@ def kill_task(request: HttpRequest, site: AdminSite, task_id: str):
     sigkill = request.GET.get("sigkill") is not None
     signal = "SIGKILL" if sigkill else "SIGTERM"
     current_app.control.revoke(task_id, terminate=True, signal=signal)
+    return HttpResponse(status=204)
+
+
+@require_POST
+def revoke_task(request: HttpRequest, site: AdminSite, task_id: str):
+    current_app.control.revoke(task_id)
     return HttpResponse(status=204)

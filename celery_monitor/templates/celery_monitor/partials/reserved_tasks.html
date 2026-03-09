@@ -1,0 +1,38 @@
+{% if reserved_tasks %}
+    <table class="task-table">
+        <thead>
+            <tr>
+                <th>Worker</th>
+                <th>Task ID</th>
+                <th>Task Name</th>
+                <th>Args</th>
+                <th>Kwargs</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in reserved_tasks %}
+                <tr>
+                    <td>{{ task.hostname|default:task.worker }}</td>
+                    <td class="task-id-cell">
+                        <a href="{% url 'admin:celery_monitor_task_detail' task.id %}">{{ task.id|truncatechars:20 }}</a>
+                    </td>
+                    <td>{{ task.name|default:"-" }}</td>
+                    <td>{{ task.args|default:"-" }}</td>
+                    <td>{{ task.kwargs|default:"-" }}</td>
+                    <td class="task-actions">
+                        <button class="kill-btn kill-btn--term"
+                                data-task-id="{{ task.id }}"
+                                hx-post="{% url 'admin:celery_monitor_task_revoke' task.id %}"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-confirm="Revoke reserved task {{ task.id }}?"
+                                hx-swap="none"
+                                hx-on::after-request="if(event.detail.successful){ markTaskRevoked(this, '{{ task.id }}'); }">Revoke</button>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p class="empty-message">No reserved tasks</p>
+{% endif %}
