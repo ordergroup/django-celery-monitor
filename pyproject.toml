@@ -96,6 +96,7 @@ lint.isort.section-order = [
 [tool.coverage.run]
 source = ["celery_monitor"]
 omit = ["*/migrations/*"]
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [
