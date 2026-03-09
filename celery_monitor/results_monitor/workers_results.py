@@ -147,7 +147,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         page: int = 0,
         page_size: int = 50,
     ) -> TasksPage:
-        return TasksPage(tasks=[], total=0, task_names=[], workers=[])
+        return TasksPage(tasks=[], total=0)
 
     def get_reserved_tasks(self) -> list[ReservedTask]:
         try:

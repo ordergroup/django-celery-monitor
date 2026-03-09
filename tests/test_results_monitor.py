@@ -11,7 +11,6 @@ from django.conf import settings
 from django.utils import timezone
 
 from celery_monitor.models import (
-    RecentTasksData,
     ReservedTask,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
@@ -55,13 +54,11 @@ class TestCeleryResultsMonitor:
         assert result == []
 
     def test_get_recent_tasks_empty(self):
-        """Test get_recent_tasks returns empty data by default."""
+        """Test get_recent_tasks returns empty list by default."""
         monitor = WorkersCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
-        assert isinstance(result, RecentTasksData)
-        assert result.recent_tasks == []
-        assert result.task_names == []
-        assert result.workers == []
+        assert isinstance(result, list)
+        assert result == []
 
     @patch("celery_monitor.results_monitor.workers_results.current_app")
     def test_get_worker_stats_with_online_workers(self, mock_app):
@@ -322,11 +319,11 @@ class TestDjangoCeleryResultsMonitor:
 
         result = monitor.get_recent_tasks(status="SUCCESS")
 
-        assert isinstance(result, RecentTasksData)
-        assert len(result.recent_tasks) == 3
-        assert all(task.status == "SUCCESS" for task in result.recent_tasks)
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert all(task.status == "SUCCESS" for task in result)
         # Verify the task IDs match
-        task_ids = {task.task_id for task in result.recent_tasks}
+        task_ids = {task.task_id for task in result}
         expected_ids = {task.task_id for task in success_tasks}
         assert task_ids == expected_ids
 
@@ -346,11 +343,11 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
 
-        assert len(result.recent_tasks) == 1
-        assert result.recent_tasks[0].task_id == "test-task-123"
-        assert result.recent_tasks[0].execution_time is not None
+        assert len(result) == 1
+        assert result[0].task_id == "test-task-123"
+        assert result[0].execution_time is not None
         assert (
-            9.0 <= result.recent_tasks[0].execution_time <= 11.0
+            9.0 <= result[0].execution_time <= 11.0
         )  # Should be around 10 seconds
 
     @pytest.mark.django_db(transaction=True)
@@ -368,9 +365,9 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
 
-        assert len(result.recent_tasks) == 1
-        assert result.recent_tasks[0].task_id == "test-task-456"
-        assert result.recent_tasks[0].execution_time is None
+        assert len(result) == 1
+        assert result[0].task_id == "test-task-456"
+        assert result[0].execution_time is None
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_includes_task_names_and_workers(self):
@@ -380,15 +377,17 @@ class TestDjangoCeleryResultsMonitor:
         TaskResultFactory(task_name="tasks.add", worker="worker1@host")  # duplicate
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_recent_tasks()
+        monitor.get_recent_tasks()
+        task_names = monitor.get_tasks_names()
+        workers = monitor.get_workers_names()
 
-        assert len(result.task_names) == 2
-        assert "tasks.add" in result.task_names
-        assert "tasks.process" in result.task_names
+        assert len(task_names) == 2
+        assert "tasks.add" in task_names
+        assert "tasks.process" in task_names
 
-        assert len(result.workers) == 2
-        assert "worker1@host" in result.workers
-        assert "worker2@host" in result.workers
+        assert len(workers) == 2
+        assert "worker1@host" in workers
+        assert "worker2@host" in workers
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_with_task_name_filter(self):
@@ -399,8 +398,8 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks(task_name="tasks.add")
 
-        assert len(result.recent_tasks) == 3
-        assert all(task.task_name == "tasks.add" for task in result.recent_tasks)
+        assert len(result) == 3
+        assert all(task.task_name == "tasks.add" for task in result)
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_with_worker_filter(self):
@@ -411,8 +410,8 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks(worker="worker1@host")
 
-        assert len(result.recent_tasks) == 4
-        assert all(task.worker == "worker1@host" for task in result.recent_tasks)
+        assert len(result) == 4
+        assert all(task.worker == "worker1@host" for task in result)
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_limit(self):
@@ -423,7 +422,7 @@ class TestDjangoCeleryResultsMonitor:
         result = monitor.get_recent_tasks()
 
         # Default limit should be 50
-        assert len(result.recent_tasks) <= 50
+        assert len(result) <= 50
 
     @pytest.mark.django_db(transaction=True)
     @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
