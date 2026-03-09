@@ -8,24 +8,32 @@ from django_celery_results.models import TaskResult
 from celery_monitor.models import (
     CeleryStatusCount,
     DashboardStatusCount,
-    RecentTask,
     RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    TaskOverview,
+    TasksPage,
     WorkerStats,
 )
+from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
+from celery_monitor.utils import is_postgres
 
 logger = logging.getLogger(__name__)
 
 
-class CeleryResultsMixin:
+class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
+    def __init__(self):
+        self.is_postgres = is_postgres()
+        self.workers_monitor = WorkersCeleryResultsMonitor()
+
     def get_overall_status_counts(self) -> list[DashboardStatusCount]:
-        if self.is_postgres and self.has_django_celery_result:
+        if self.is_postgres:
             status_counts = CeleryStatusCount.objects.all().order_by("status")
             stats = [
                 DashboardStatusCount(row.status, row.count) for row in status_counts
             ]
-        elif not self.is_postgres and self.has_django_celery_result:
+        else:
             status_counts = (
                 TaskResult.objects.values("status")
                 .annotate(count=Count("id"))
@@ -35,8 +43,6 @@ class CeleryResultsMixin:
                 DashboardStatusCount(row["status"], row["count"])
                 for row in status_counts
             ]
-        else:
-            stats = []
 
         return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
@@ -54,8 +60,8 @@ class CeleryResultsMixin:
         ]
         return [DashboardStatusCount("total", sum(i.count for i in stats)), *stats]
 
-    def get_worker_stats(self) -> list[WorkerStats]:
-        workers = super().get_worker_stats()
+    def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
+        workers = self.workers_monitor.get_worker_stats(include_offline)
         worker_names = {worker.name for worker in workers}
         try:
             day_ago = timezone.now() - timedelta(days=1)
@@ -67,7 +73,7 @@ class CeleryResultsMixin:
             )
 
             for worker_name in recent_workers:
-                if worker_name not in worker_names:
+                if include_offline and worker_name not in worker_names:
                     workers.append(
                         WorkerStats(
                             name=worker_name,
@@ -85,33 +91,22 @@ class CeleryResultsMixin:
 
     def get_task_execution_stats(
         self,
-        hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
         try:
             queryset = TaskResult.objects.all()
 
-            if date_from and date_to:
-                try:
-                    date_from_dt = datetime.fromisoformat(date_from)
-                    date_to_dt = datetime.fromisoformat(date_to)
-                    if timezone.is_naive(date_from_dt):
-                        date_from_dt = timezone.make_aware(date_from_dt)
-                    if timezone.is_naive(date_to_dt):
-                        date_to_dt = timezone.make_aware(date_to_dt)
-                    queryset = queryset.filter(
-                        date_done__gte=date_from_dt, date_done__lte=date_to_dt
-                    )
-                except (ValueError, TypeError):
-                    if hours is not None:
-                        time_threshold = timezone.now() - timedelta(hours=hours)
-                        queryset = queryset.filter(date_done__gte=time_threshold)
-            elif hours is not None:
-                time_threshold = timezone.now() - timedelta(hours=hours)
-                queryset = queryset.filter(date_done__gte=time_threshold)
+            if date_from:
+                if timezone.is_naive(date_from):
+                    date_from = timezone.make_aware(date_from)
+                queryset = queryset.filter(date_done__gte=date_from)
+            if date_to:
+                if timezone.is_naive(date_to):
+                    date_to = timezone.make_aware(date_to)
+                queryset = queryset.filter(date_done__lte=date_to)
 
             stats = queryset.values("task_name").annotate(
                 total_count=Count("id"),
@@ -222,15 +217,18 @@ class CeleryResultsMixin:
             # Convert to RecentTask dataclass
             recent_tasks = []
             for task in recent_tasks_qs:
-                # Calculate execution time if both dates are available
                 execution_time = None
-                if task.date_started and task.date_done:
+                if (
+                    task.date_started
+                    and task.date_done
+                    and task.date_done >= task.date_started
+                ):
                     execution_time = (
                         task.date_done - task.date_started
                     ).total_seconds()
 
                 recent_tasks.append(
-                    RecentTask(
+                    TaskOverview(
                         task_id=task.task_id,
                         task_name=task.task_name,
                         status=task.status,
@@ -293,3 +291,75 @@ class CeleryResultsMixin:
         except Exception as e:
             logger.exception("Error getting task detail: %s", e)
             return None
+
+    def get_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        page: int = 0,
+        page_size: int = 50,
+    ) -> TasksPage:
+        try:
+            qs = TaskResult.objects.all()
+
+            if status:
+                qs = qs.filter(status=status)
+            if task_name:
+                qs = qs.filter(task_name=task_name)
+            if worker:
+                qs = qs.filter(worker=worker)
+            if date_from:
+                qs = qs.filter(date_done__lte=date_to)
+            if date_to:
+                qs = qs.filter(date_done__lte=date_to)
+
+            total = qs.count()
+            offset = page * page_size
+            page_qs = qs.order_by("-date_done")[offset : offset + page_size]
+
+            tasks = []
+            for task in page_qs:
+                execution_time = None
+                if (
+                    task.date_started
+                    and task.date_done
+                    and task.date_done >= task.date_started
+                ):
+                    execution_time = (
+                        task.date_done - task.date_started
+                    ).total_seconds()
+                tasks.append(
+                    TaskOverview(
+                        task_id=task.task_id,
+                        task_name=task.task_name,
+                        status=task.status,
+                        worker=task.worker,
+                        date_started=task.date_started,
+                        date_done=task.date_done,
+                        execution_time=execution_time,
+                    )
+                )
+
+            task_names = list(
+                TaskResult.objects.exclude(task_name__isnull=True)
+                .values_list("task_name", flat=True)
+                .distinct()
+                .order_by("task_name")
+            )
+            workers = list(
+                TaskResult.objects.exclude(worker__isnull=True)
+                .values_list("worker", flat=True)
+                .distinct()
+                .order_by("worker")
+            )
+
+            return TasksPage(
+                tasks=tasks, total=total, task_names=task_names, workers=workers
+            )
+
+        except Exception as e:
+            logger.exception("Error getting tasks: %s", e)
+            return TasksPage(tasks=[], total=0, task_names=[], workers=[])

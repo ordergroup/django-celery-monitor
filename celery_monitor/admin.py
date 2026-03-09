@@ -52,11 +52,35 @@ def patch_admin_site(site):
                 name="celery_monitor_task_execution_stats",
             ),
             path(
+                "celery-monitor/task-results",
+                site.admin_view(lambda req: views.task_results(req, site)),
+                name="celery_monitor_task_results",
+            ),
+            path(
                 "celery-monitor/task/<str:task_id>/",
                 site.admin_view(
                     lambda req, task_id: views.task_detail_view(req, site, task_id)
                 ),
                 name="celery_monitor_task_detail",
+            ),
+            path(
+                "celery-monitor/task/<str:task_id>/kill",
+                site.admin_view(
+                    lambda req, task_id: views.kill_task(req, site, task_id)
+                ),
+                name="celery_monitor_task_kill",
+            ),
+            path(
+                "celery-monitor/queues/clear-all/",
+                site.admin_view(lambda req: views.clear_all_queues(req, site)),
+                name="celery_monitor_clear_all_queues",
+            ),
+            path(
+                "celery-monitor/queues/<str:queue_name>/clear/",
+                site.admin_view(
+                    lambda req, queue_name: views.clear_queue(req, site, queue_name)
+                ),
+                name="celery_monitor_clear_queue",
             ),
         ]
         return custom_urls + _orig_get_urls()
@@ -77,6 +101,7 @@ def patch_admin_site(site):
             execution_stats_url = reverse(
                 f"{site.name}:celery_monitor_task_execution_stats"
             )
+            task_results_url = reverse(f"{site.name}:celery_monitor_task_results")
 
             models = [
                 {
@@ -86,8 +111,14 @@ def patch_admin_site(site):
                     "view_only": True,
                 },
                 {
+                    "name": "Task Results",
+                    "object_name": "CeleryMonitorTaskResults",
+                    "admin_url": task_results_url,
+                    "view_only": True,
+                },
+                {
                     "name": "Task Execution Stats",
-                    "object_name": "TaskExecutionStats",
+                    "object_name": "CeleryMonitorTaskExecutionStats",
                     "admin_url": execution_stats_url,
                     "view_only": True,
                 },

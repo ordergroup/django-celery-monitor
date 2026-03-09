@@ -1,0 +1,170 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load celery_monitor_tags %}
+{% block extrabody %}<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>{% endblock %}
+{% block title %}Task Results{% endblock %}
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+{% endblock %}
+{% block content %}
+    {% if is_redis %}
+        <div class="info-box">Status, task name, and worker filtering are not available for the Redis backend.</div>
+        <form class="filters filters--rows" method="get" id="filters-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>From:</label>
+                    <input type="datetime-local"
+                           name="date_from"
+                           id="date_from"
+                           value="{{ filters.date_from }}">
+                </div>
+                <div class="filter-group">
+                    <label>To:</label>
+                    <input type="datetime-local"
+                           name="date_to"
+                           id="date_to"
+                           value="{{ filters.date_to }}">
+                </div>
+                <div class="filter-group">
+                    <button type="submit">Apply</button>
+                    <a href="?">Clear</a>
+                </div>
+            </div>
+        </form>
+    {% else %}
+        <form class="filters filters--rows" method="get" id="filters-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="status">Status:</label>
+                    <select name="status" id="status">
+                        <option value="">All</option>
+                        <option value="SUCCESS"
+                                {% if filters.status == "SUCCESS" %}selected{% endif %}>SUCCESS</option>
+                        <option value="FAILURE"
+                                {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
+                        <option value="STARTED"
+                                {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
+                        <option value="PENDING"
+                                {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
+                        <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
+                        <option value="REVOKED"
+                                {% if filters.status == "REVOKED" %}selected{% endif %}>REVOKED</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="task_name">Task:</label>
+                    <select name="task_name" id="task_name">
+                        <option value="">All</option>
+                        {% for name in task_names %}
+                            <option value="{{ name }}"
+                                    {% if filters.task_name == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="worker">Worker:</label>
+                    <select name="worker" id="worker">
+                        <option value="">All</option>
+                        {% for w in workers %}
+                            <option value="{{ w }}" {% if filters.worker == w %}selected{% endif %}>{{ w }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button type="submit">Apply</button>
+                    <a href="?">Clear</a>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>From:</label>
+                    <input type="datetime-local"
+                           name="date_from"
+                           id="date_from"
+                           value="{{ filters.date_from }}">
+                </div>
+                <div class="filter-group">
+                    <label>To:</label>
+                    <input type="datetime-local"
+                           name="date_to"
+                           id="date_to"
+                           value="{{ filters.date_to }}">
+                </div>
+            </div>
+        </form>
+        <script>
+document.getElementById('filters-form').addEventListener('change', function(e) {
+    if (e.target.tagName === 'SELECT') this.submit();
+});
+        </script>
+    {% endif %}
+    <div class="table-meta">
+        <span>{{ total }} task{{ total|pluralize }} total</span>
+        {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}
+    </div>
+    <table class="task-table">
+        <thead>
+            <tr>
+                <th>Task ID</th>
+                <th>Task Name</th>
+                <th>Status</th>
+                <th>Worker</th>
+                <th>Started</th>
+                <th>Completed</th>
+                <th>Execution Time</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+                <tr>
+                    <td class="task-id-cell">
+                        <a href="{% url 'admin:celery_monitor_task_detail' task.task_id %}">{{ task.task_id|truncatechars:20 }}</a>
+                    </td>
+                    <td>{{ task.task_name|default:"-" }}</td>
+                    <td>
+                        <span class="status-badge {{ task.status }}">{{ task.status }}</span>
+                    </td>
+                    <td>{{ task.worker|default:"-" }}</td>
+                    <td>{{ task.date_started|default:"-" }}</td>
+                    <td>{{ task.date_done|default:"-" }}</td>
+                    <td>{{ task.execution_time|format_duration }}</td>
+                    <td class="task-actions">
+                        {% if task.status == "STARTED" or task.status == "PROGRESS" %}
+                            <button class="kill-btn kill-btn--term"
+                                    hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-confirm="Send SIGTERM to task {{ task.task_id }}?"
+                                    hx-swap="none">SIGTERM</button>
+                            <button class="kill-btn kill-btn--kill"
+                                    hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}?sigkill"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-confirm="Send SIGKILL to task {{ task.task_id }}?"
+                                    hx-swap="none">SIGKILL</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="8" class="empty-row">No tasks found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if filters.page > 0 %}
+                <a href="?page=0&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">&laquo; First</a>
+                <a href="?page={{ filters.page|add:"-1" }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">&lsaquo; Prev</a>
+            {% endif %}
+            <span class="pagination-current">{{ filters.page|add:1 }} / {{ total_pages }}</span>
+            {% if filters.page|add:1 < total_pages %}
+                <a href="?page={{ filters.page|add:"1" }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Next &rsaquo;</a>
+                {% with last_page=total_pages|add:"-1" %}
+                    <a href="?page={{ last_page }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Last &raquo;</a>
+                {% endwith %}
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}

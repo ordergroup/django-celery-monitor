@@ -2,6 +2,7 @@ import json
 from collections import defaultdict
 
 import redis
+from redis import Redis
 
 from celery_monitor.models import QueueStats, QueueTaskTypeStats
 from celery_monitor.queue_monitor.base import QueueMonitor
@@ -10,7 +11,7 @@ from celery_monitor.queue_monitor.base import QueueMonitor
 class RedisMonitor(QueueMonitor):
     def __init__(self):
         super().__init__()
-        self.redis = redis.from_url(self.broker_url)
+        self.redis: Redis = redis.from_url(self.broker_url)
 
     def get_queue_task_types(self) -> list[QueueTaskTypeStats]:
         stats = []
@@ -39,6 +40,9 @@ class RedisMonitor(QueueMonitor):
 
         except Exception:
             return []
+
+    def clear_queue(self, queue_name: str) -> None:
+        self.redis.delete(queue_name)
 
     def _count_tasks_in_queue(self, queue_name: str) -> dict[str, int]:
         task_types = defaultdict(int)

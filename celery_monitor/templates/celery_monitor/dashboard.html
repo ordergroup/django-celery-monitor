@@ -1,19 +1,22 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% load celery_monitor_tags %}
-
 {% block extrahead %}
-{{ block.super }}
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" 
-        crossorigin="anonymous"></script>
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
+            crossorigin="anonymous"></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <script>
+  document.addEventListener("htmx:configRequest", (e) => {
+    e.detail.headers["X-CSRFToken"] = document.querySelector("meta[name=csrf-token]").content;
+  });
+    </script>
 {% endblock %}
-
 {% block title %}Celery Monitor Dashboard{% endblock %}
-
 {% block extrastyle %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
-<script>
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+    <script>
 function toggleAccordion(id) {
   const element = document.getElementById(id);
   const icon = document.getElementById(id + '-icon');
@@ -25,41 +28,72 @@ function toggleAccordion(id) {
     icon.textContent = '▶';
   }
 }
-</script>
+    </script>
 {% endblock %}
-
 {% block content %}
-
-<div>
-  <h2 class="section-title">Workers</h2>
-  <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
-</div>
-
-<div>
-  <h2 class="section-title">Redis Queue Stats</h2>
-  <div hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
-</div>
-
-<div>
-  <h2 class="section-title" style="cursor: pointer; user-select: none;" onclick="toggleAccordion('task-types-accordion')">
-    <span id="task-types-accordion-icon">▶</span> Task Types per Queue
-  </h2>
-  <div id="task-types-accordion" style="display: none;" hx-get="{% url 'admin:celery_monitor_redis_queue_task_types' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
-</div>
-
-<div>
-  <h2 class="section-title">Overall Stats</h2>
-  <div hx-get="{% url 'admin:celery_monitor_statuses_overall_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
-</div>
-
-<div>
-  <h2 class="section-title">Last Hour</h2>
-  <div hx-get="{% url 'admin:celery_monitor_statuses_last_hour_count' %}" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
-</div>
-
-
-<div>
-  <h2 class="section-title">Recent Tasks (last 50)</h2>
-  <div hx-get="{% url 'admin:celery_monitor_recent_tasks' %}" hx-trigger="load" hx-swap="innerHTML"></div>
-</div>
+    <div>
+        <h2 class="section-title"
+            style="display: flex;
+                   align-items: center;
+                   gap: 10px">
+            Workers
+            <label style="display: flex;
+                          align-items: center;
+                          gap: 6px;
+                          font-size: 0.75em;
+                          font-weight: normal;
+                          cursor: pointer">
+                <span class="toggle-switch">
+                    <input type="checkbox"
+                           id="offline-toggle"
+                           name="include_offline"
+                           value="true">
+                    <span class="toggle-slider"></span>
+                </span>
+                <span>Include offline</span>
+            </label>
+        </h2>
+        <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}"
+             hx-trigger="load, every 5s, change from:#offline-toggle"
+             hx-include="#offline-toggle"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        <h2 class="section-title">Redis Queue Stats</h2>
+        <div id="queue-stats"
+             hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}"
+             hx-trigger="load, every 5s, refresh"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        <h2 class="section-title"
+            style="cursor: pointer;
+                   user-select: none"
+            onclick="toggleAccordion('task-types-accordion')">
+            <span id="task-types-accordion-icon">▶</span> Task Types per Queue
+        </h2>
+        <div id="task-types-accordion"
+             style="display: none"
+             hx-get="{% url 'admin:celery_monitor_redis_queue_task_types' %}"
+             hx-trigger="load, every 5s"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        <h2 class="section-title">Overall Stats</h2>
+        <div hx-get="{% url 'admin:celery_monitor_statuses_overall_count' %}"
+             hx-trigger="load, every 5s"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        <h2 class="section-title">Last Hour</h2>
+        <div hx-get="{% url 'admin:celery_monitor_statuses_last_hour_count' %}"
+             hx-trigger="load, every 5s"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        <h2 class="section-title">Recent Tasks (last 50)</h2>
+        <div hx-get="{% url 'admin:celery_monitor_recent_tasks' %}"
+             hx-trigger="load"
+             hx-swap="innerHTML"></div>
+    </div>
 {% endblock %}

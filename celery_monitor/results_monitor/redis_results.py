@@ -10,11 +10,15 @@ from django.utils import timezone
 
 from celery_monitor.models import (
     DashboardStatusCount,
-    RecentTask,
     RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    TaskOverview,
+    TasksPage,
+    WorkerStats,
 )
+from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +26,7 @@ REDIS_SCHEME = "redis://"
 REDIS_SECURE_SCHEME = "rediss://"
 
 
-class RedisCustomResultsMixin:
+class RedisResultsMonitor(CeleryResultsMonitor):
     """
     Mixin that uses a custom Redis schema for efficient task monitoring.
 
@@ -44,6 +48,7 @@ class RedisCustomResultsMixin:
     def __init__(self):
         super().__init__()
         self._redis_client = None
+        self.workers_monitor = WorkersCeleryResultsMonitor()
 
     def _get_redis_client(self) -> redis.Redis | None:
         if self._redis_client is not None:
@@ -66,6 +71,9 @@ class RedisCustomResultsMixin:
         except Exception as e:
             logger.warning("Could not connect to Redis: %s", e)
             return None
+
+    def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
+        return self.workers_monitor.get_worker_stats(include_offline)
 
     def get_overall_status_counts(self) -> list[DashboardStatusCount]:
         client = self._get_redis_client()
@@ -118,18 +126,18 @@ class RedisCustomResultsMixin:
 
     def get_task_execution_stats(
         self,
-        hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
         """Get task execution statistics."""
         client = self._get_redis_client()
         if not client:
             return []
 
-        start_time, end_time = get_datetime_range(hours, date_from, date_to)
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
 
         task_ids = client.zrangebyscore(
             "celery:monitor:tasks:recent", start_time, end_time
@@ -202,6 +210,24 @@ class RedisCustomResultsMixin:
         )
         return result
 
+    def get_paginated_tasks(
+        self, page_number: int = 0, page_size: int = 50
+    ) -> list[TaskOverview]:
+        client = self._get_redis_client()
+        if not client:
+            return []
+
+        start = page_number * page_size
+        task_ids = client.zrevrange(
+            "celery:monitor:tasks:recent",
+            start=start,
+            end=start + page_size,
+        )
+        if not task_ids:
+            return []
+
+        return self._get_tasks_overviews(task_ids)
+
     def get_recent_tasks(
         self,
         status: str | None = None,
@@ -255,13 +281,13 @@ class RedisCustomResultsMixin:
             date_done = get_timestamp(task_data, "date_done")
 
             recent_tasks.append(
-                RecentTask(
+                TaskOverview(
                     task_id=task_data.get("task_id"),
                     task_name=task_name_value,
                     status=task_status,
                     worker=task_worker,
-                    date_started=date_started.isoformat() if date_started else None,
-                    date_done=date_done.isoformat() if date_done else None,
+                    date_started=date_started,
+                    date_done=date_done,
                     execution_time=execution_time,
                 )
             )
@@ -308,38 +334,70 @@ class RedisCustomResultsMixin:
             exception_type=task_data.get("exception_type"),
         )
 
-        return TaskDetail(task_data)
+    def get_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        page: int = 0,
+        page_size: int = 50,
+    ) -> TasksPage:
+        client = self._get_redis_client()
+        if not client:
+            return TasksPage(tasks=[], total=0, task_names=[], workers=[])
 
+        has_date_filter = bool(date_from or date_to)
 
-def get_datetime_range(
-    hours: int | None = 1,
-    date_from: str | None = None,
-    date_to: str | None = None,
-) -> tuple[float, float]:
-    if date_from and date_to:
-        try:
-            date_from_dt = datetime.fromisoformat(date_from)
-            date_to_dt = datetime.fromisoformat(date_to)
-            if timezone.is_naive(date_from_dt):
-                date_from_dt = timezone.make_aware(date_from_dt)
-            if timezone.is_naive(date_to_dt):
-                date_to_dt = timezone.make_aware(date_to_dt)
-            start_time = date_from_dt.timestamp()
-            end_time = date_to_dt.timestamp()
-            return start_time, end_time
-        except (ValueError, TypeError):
-            if hours is not None:
-                end_time = timezone.now().timestamp()
-                start_time = (timezone.now() - timedelta(hours=hours)).timestamp()
-                return start_time, end_time
-            else:
-                raise
-    elif hours is not None:
-        end_time = timezone.now().timestamp()
-        start_time = (timezone.now() - timedelta(hours=hours)).timestamp()
-        return start_time, end_time
-    else:
-        raise Exception("either hours of date_from and date_to must be defined")
+        if has_date_filter:
+            start_time = date_from.timestamp() if date_from else float("-inf")
+            end_time = date_to.timestamp() if date_to else float("inf")
+            all_task_ids = client.zrangebyscore(
+                "celery:monitor:tasks:recent",
+                start_time,
+                end_time,
+            )
+            # Reverse to get newest first, then paginate
+            all_task_ids = list(reversed(all_task_ids))
+            total = len(all_task_ids)
+            start = page * page_size
+            task_ids = all_task_ids[start : start + page_size]
+        else:
+            total = client.zcard("celery:monitor:tasks:recent")
+            start = page * page_size
+            task_ids = client.zrevrange(
+                "celery:monitor:tasks:recent",
+                start=start,
+                end=start + page_size - 1,
+            )
+
+        tasks = self._get_tasks_overviews(task_ids)
+        return TasksPage(tasks=tasks, total=total, task_names=[], workers=[])
+
+    def _get_tasks_overviews(self, task_ids: str) -> list[TaskOverview]:
+        client = self._get_redis_client()
+        if not client:
+            return []
+
+        pipeline = client.pipeline()
+        for task_id in task_ids:
+            pipeline.hgetall(f"celery:monitor:tasks:{task_id}")
+
+        tasks = pipeline.execute()
+
+        return [
+            TaskOverview(
+                task_id=task_data.get("task_id"),
+                task_name=task_data.get("task_name"),
+                status=task_data.get("status"),
+                worker=task_data.get("worker"),
+                date_started=get_timestamp(task_data, "date_started"),
+                date_done=get_timestamp(task_data, "date_done"),
+                execution_time=get_execution_time(task_data),
+            )
+            for task_data in tasks
+        ]
 
 
 def get_execution_time(task_data: dict) -> float | None:
@@ -349,7 +407,8 @@ def get_execution_time(task_data: dict) -> float | None:
         return None
 
     with contextlib.suppress(ValueError, TypeError):
-        return float(done) - float(started)
+        elapsed = float(done) - float(started)
+        return elapsed if elapsed >= 0 else None
 
     return None
 

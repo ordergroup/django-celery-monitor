@@ -2,6 +2,7 @@ from django.conf import settings
 
 from celery_monitor.enums import BackendType
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import has_django_celery_result, has_redis
 
 
@@ -32,24 +33,18 @@ def get_results_monitor() -> CeleryResultsMonitor:
         results_backend in (BackendType.CELERY_RESULTS, BackendType.UNKNOWN)
         and has_django_celery_result()
     ):
-        from celery_monitor.results_monitor.celery_results_mixin import (
-            CeleryResultsMixin,
+        from celery_monitor.results_monitor.django_celery_results import (
+            DjangoCeleryResultsMonitor,
         )
 
-        class EnhancedResultsMonitor(CeleryResultsMixin, CeleryResultsMonitor):
-            pass
-
-        return EnhancedResultsMonitor()
+        return DjangoCeleryResultsMonitor()
 
     elif results_backend in (BackendType.REDIS, BackendType.UNKNOWN) and has_redis():
-        from celery_monitor.results_monitor.redis_custom_mixin import (
-            RedisCustomResultsMixin,
+        from celery_monitor.results_monitor.redis_results import (
+            RedisResultsMonitor,
         )
-
-        class RedisResultsMonitor(RedisCustomResultsMixin, CeleryResultsMonitor):
-            pass
 
         return RedisResultsMonitor()
 
-    # Default: use base monitor (limited functionality)
-    return CeleryResultsMonitor()
+    # Default: use monitor with limited functionality
+    return WorkersCeleryResultsMonitor()

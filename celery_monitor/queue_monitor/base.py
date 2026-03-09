@@ -24,3 +24,6 @@ class QueueMonitor:
             queue_names = [current_app.conf.task_default_queue or "celery"]
 
         return queue_names
+
+    def clear_queue(self, queue_name: str) -> None:
+        return None
