@@ -647,6 +647,67 @@ pre.code-block {
   color: #f5a3b0;
 }
 
+/* ── Kill task buttons ────────────────────────────────────── */
+
+.task-actions {
+  white-space: nowrap;
+}
+
+.kill-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  border: 1px solid;
+}
+
+.kill-btn--term {
+  color: #d97706;
+  background: transparent;
+  border-color: #d97706;
+}
+.kill-btn--term:hover {
+  background: #d97706;
+  color: #fff;
+}
+
+.kill-btn--kill {
+  color: #dc3545;
+  background: transparent;
+  border-color: #dc3545;
+  margin-left: 4px;
+}
+.kill-btn--kill:hover {
+  background: #dc3545;
+  color: #fff;
+}
+
+.dark .kill-btn--term,
+[data-theme="dark"] .kill-btn--term {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+.dark .kill-btn--term:hover,
+[data-theme="dark"] .kill-btn--term:hover {
+  background: #44300a;
+  color: #fbbf24;
+}
+
+.dark .kill-btn--kill,
+[data-theme="dark"] .kill-btn--kill {
+  color: #f5a3b0;
+  border-color: #f5a3b0;
+}
+.dark .kill-btn--kill:hover,
+[data-theme="dark"] .kill-btn--kill:hover {
+  background: #4a1520;
+  color: #f5a3b0;
+}
+
 /* ── Toggle switch ────────────────────────────────────────── */
 
 .toggle-switch {

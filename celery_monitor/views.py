@@ -1,5 +1,6 @@
 import math
 
+from celery import current_app
 from django.contrib.admin import AdminSite
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.template.response import TemplateResponse
@@ -181,4 +182,12 @@ def clear_all_queues(request: HttpRequest, site: AdminSite):
     queue_monitor = get_queue_monitor()
     for queue_name in queue_monitor.get_queue_names():
         queue_monitor.clear_queue(queue_name)
+    return HttpResponse(status=204)
+
+
+@require_POST
+def kill_task(request: HttpRequest, site: AdminSite, task_id: str):
+    sigkill = request.GET.get("sigkill") is not None
+    signal = "SIGKILL" if sigkill else "SIGTERM"
+    current_app.control.revoke(task_id, terminate=True, signal=signal)
     return HttpResponse(status=204)

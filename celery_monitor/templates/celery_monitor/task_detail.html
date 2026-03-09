@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
+{% block extrabody %}<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>{% endblock %}
 {% block title %}Task {{ task.task_id }}{% endblock %}
 {% block extrastyle %}
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
@@ -17,6 +18,18 @@
         <div class="label">Status</div>
         <div class="value">
             <span class="status-badge {{ task.status }}">{{ task.status }}</span>
+            {% if task.status == "STARTED" %}
+                <button class="kill-btn kill-btn--term"
+                        hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-confirm="Send SIGTERM to task {{ task.task_id }}?"
+                        hx-swap="none">SIGTERM</button>
+                <button class="kill-btn kill-btn--kill"
+                        hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}?sigkill"
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-confirm="Send SIGKILL to task {{ task.task_id }}?"
+                        hx-swap="none">SIGKILL</button>
+            {% endif %}
         </div>
         <div class="label">Worker</div>
         <div class="value">{{ task.worker|default:"-" }}</div>

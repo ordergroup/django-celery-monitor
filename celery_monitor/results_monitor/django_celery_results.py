@@ -1,4 +1,3 @@
-from django.utils.timezone import is_naive
 import logging
 from datetime import datetime, timedelta
 
@@ -218,9 +217,12 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
             # Convert to RecentTask dataclass
             recent_tasks = []
             for task in recent_tasks_qs:
-                # Calculate execution time if both dates are available
                 execution_time = None
-                if task.date_started and task.date_done:
+                if (
+                    task.date_started
+                    and task.date_done
+                    and task.date_done >= task.date_started
+                ):
                     execution_time = (
                         task.date_done - task.date_started
                     ).total_seconds()
@@ -321,7 +323,11 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
             tasks = []
             for task in page_qs:
                 execution_time = None
-                if task.date_started and task.date_done:
+                if (
+                    task.date_started
+                    and task.date_done
+                    and task.date_done >= task.date_started
+                ):
                     execution_time = (
                         task.date_done - task.date_started
                     ).total_seconds()

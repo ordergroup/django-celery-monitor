@@ -239,16 +239,13 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         Get recent tasks from Redis, if filtering is applied this function will return
         always less results than limit, because filtering is happening after fetching the data from redis.
         """
-        print(f"{locals()}")
         client = self._get_redis_client()
         if not client:
-            print("empty1")
             return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
 
         # Get recent task IDs (sorted by timestamp, newest first)
         task_ids = client.zrevrange("celery:monitor:tasks:recent", 0, limit * 2 - 1)
         if not task_ids:
-            print("empty2")
             return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
 
         pipeline = client.pipeline()
@@ -410,7 +407,8 @@ def get_execution_time(task_data: dict) -> float | None:
         return None
 
     with contextlib.suppress(ValueError, TypeError):
-        return float(done) - float(started)
+        elapsed = float(done) - float(started)
+        return elapsed if elapsed >= 0 else None
 
     return None
 

@@ -64,6 +64,13 @@ def patch_admin_site(site):
                 name="celery_monitor_task_detail",
             ),
             path(
+                "celery-monitor/task/<str:task_id>/kill",
+                site.admin_view(
+                    lambda req, task_id: views.kill_task(req, site, task_id)
+                ),
+                name="celery_monitor_task_kill",
+            ),
+            path(
                 "celery-monitor/queues/clear-all/",
                 site.admin_view(lambda req: views.clear_all_queues(req, site)),
                 name="celery_monitor_clear_all_queues",
