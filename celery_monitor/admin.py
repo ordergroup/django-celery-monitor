@@ -42,6 +42,11 @@ def patch_admin_site(site):
                 name="celery_monitor_worker_stats",
             ),
             path(
+                "celery-monitor/reserved-tasks",
+                site.admin_view(views.reserved_tasks_view),
+                name="celery_monitor_reserved_tasks",
+            ),
+            path(
                 "celery-monitor/redis-queue-task-types",
                 site.admin_view(views.redis_queue_task_types_view),
                 name="celery_monitor_redis_queue_task_types",
@@ -69,6 +74,13 @@ def patch_admin_site(site):
                     lambda req, task_id: views.kill_task(req, site, task_id)
                 ),
                 name="celery_monitor_task_kill",
+            ),
+            path(
+                "celery-monitor/task/<str:task_id>/revoke",
+                site.admin_view(
+                    lambda req, task_id: views.revoke_task(req, site, task_id)
+                ),
+                name="celery_monitor_task_revoke",
             ),
             path(
                 "celery-monitor/queues/clear-all/",

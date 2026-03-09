@@ -31,6 +31,17 @@ class WorkerStats:
     pool_size: int | None = None
     max_concurrency: int | None = None
     queues: list[str] | None = None
+    reserved_tasks: int = 0
+
+
+@dataclass
+class ReservedTask:
+    id: str
+    name: str | None
+    worker: str
+    hostname: str | None
+    args: Any | None
+    kwargs: Any | None
 
 
 @dataclass

@@ -14,6 +14,7 @@ from celery_monitor.filters import (
 )
 from celery_monitor.queue_monitor import get_queue_monitor
 from celery_monitor.results_monitor import get_results_monitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import is_redis_backend
 
 
@@ -70,6 +71,17 @@ def worker_stats_view(request: HttpRequest):
     return TemplateResponse(
         request,
         "celery_monitor/partials/worker_stats.html",
+        context,
+    )
+
+
+def reserved_tasks_view(request: HttpRequest):
+    workers_monitor = WorkersCeleryResultsMonitor()
+    reserved_tasks = workers_monitor.get_reserved_tasks()
+    context = {"reserved_tasks": reserved_tasks}
+    return TemplateResponse(
+        request,
+        "celery_monitor/partials/reserved_tasks.html",
         context,
     )
 
@@ -190,4 +202,10 @@ def kill_task(request: HttpRequest, site: AdminSite, task_id: str):
     sigkill = request.GET.get("sigkill") is not None
     signal = "SIGKILL" if sigkill else "SIGTERM"
     current_app.control.revoke(task_id, terminate=True, signal=signal)
+    return HttpResponse(status=204)
+
+
+@require_POST
+def revoke_task(request: HttpRequest, site: AdminSite, task_id: str):
+    current_app.control.revoke(task_id)
     return HttpResponse(status=204)
