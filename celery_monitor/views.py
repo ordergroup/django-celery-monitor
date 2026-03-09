@@ -95,12 +95,14 @@ def recent_tasks_view(request: HttpRequest):
         worker=filters.worker,
         limit=filters.limit,
     )
+    task_names = results_monitor.get_tasks_names()
+    workers = results_monitor.get_workers_names()
 
     context = {
-        "recent_tasks": data.recent_tasks,
+        "recent_tasks": data,
         "filters": filters,
-        "task_names": data.task_names,
-        "workers": data.workers,
+        "task_names": task_names,
+        "workers": workers,
     }
     return TemplateResponse(
         request,
@@ -122,6 +124,7 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
         **site.each_context(request),
         "title": "Task Execution Stats",
         "execution_stats": execution_stats,
+        "hours_param": request.GET.get("hours", ""),
         "filters": filters,
     }
     return TemplateResponse(
@@ -167,14 +170,16 @@ def task_results(request: HttpRequest, site: AdminSite):
         page_size=filters.page_size,
     )
     total_pages = max(1, math.ceil(result.total / filters.page_size))
+    task_names = results_monitor.get_tasks_names()
+    workers = results_monitor.get_workers_names()
 
     context = {
         **site.each_context(request),
         "title": "Task Results",
         "tasks": result.tasks,
         "total": result.total,
-        "task_names": result.task_names,
-        "workers": result.workers,
+        "task_names": task_names,
+        "workers": workers,
         "filters": filters,
         "total_pages": total_pages,
         "is_redis": is_redis_backend(),

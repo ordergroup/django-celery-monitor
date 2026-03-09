@@ -4,18 +4,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import time_machine
-
-# Check if django_celery_results is in INSTALLED_APPS
-# We need to do lazy imports because the models will raise RuntimeError if not in INSTALLED_APPS
 from django.conf import settings
 from django.utils import timezone
-
-from celery_monitor.models import (
-    RecentTasksData,
-    ReservedTask,
-)
-from celery_monitor.results_monitor.base import CeleryResultsMonitor
-from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 
 HAS_CELERY_RESULTS = "django_celery_results" in settings.INSTALLED_APPS
 
@@ -26,188 +16,6 @@ if HAS_CELERY_RESULTS:
         DjangoCeleryResultsMonitor,
     )
     from tests.factories import TaskResultFactory
-
-
-class TestCeleryResultsMonitor:
-    """Test the base CeleryResultsMonitor class."""
-
-    def test_init(self):
-        """Test instantiation of WorkersCeleryResultsMonitor."""
-        monitor = WorkersCeleryResultsMonitor()
-        assert isinstance(monitor, CeleryResultsMonitor)
-
-    def test_get_overall_status_counts_empty(self):
-        """Test get_overall_status_counts returns empty list by default."""
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_overall_status_counts()
-        assert result == []
-
-    def test_get_last_hour_status_counts_empty(self):
-        """Test get_last_hour_status_counts returns empty list by default."""
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_last_hour_status_counts()
-        assert result == []
-
-    def test_get_task_execution_stats_empty(self):
-        """Test get_task_execution_stats returns empty list by default."""
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats()
-        assert result == []
-
-    def test_get_recent_tasks_empty(self):
-        """Test get_recent_tasks returns empty data by default."""
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_recent_tasks()
-        assert isinstance(result, RecentTasksData)
-        assert result.recent_tasks == []
-        assert result.task_names == []
-        assert result.workers == []
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_worker_stats_with_online_workers(self, mock_app):
-        """Test get_worker_stats with online workers."""
-        mock_inspect = Mock()
-        mock_inspect.ping.return_value = {
-            "worker1@host": {"ok": "pong"},
-            "worker2@host": {"ok": "pong"},
-        }
-        mock_inspect.active.return_value = {
-            "worker1@host": [{"id": "task1"}, {"id": "task2"}],
-            "worker2@host": [],
-        }
-        mock_inspect.reserved.return_value = {
-            "worker1@host": [
-                {
-                    "id": "reserved-task-1",
-                    "name": "tasks.email",
-                    "args": [],
-                    "kwargs": {},
-                },
-                {
-                    "id": "reserved-task-2",
-                    "name": "tasks.report",
-                    "args": [42],
-                    "kwargs": {},
-                },
-            ],
-            "worker2@host": [],
-        }
-        mock_inspect.active_queues.return_value = {
-            "worker1@host": [{"name": "celery"}, {"name": "high_priority"}],
-            "worker2@host": [{"name": "celery"}],
-        }
-        mock_app.control.inspect.return_value = mock_inspect
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_worker_stats()
-
-        assert len(result) == 2
-        assert result[0].name == "worker1@host"
-        assert result[0].status == "online"
-        assert result[0].active_tasks == 2
-        assert result[0].reserved_tasks == 2
-        assert result[0].queues == ["celery", "high_priority"]
-        assert result[1].name == "worker2@host"
-        assert result[1].status == "online"
-        assert result[1].active_tasks == 0
-        assert result[1].reserved_tasks == 0
-        assert result[1].queues == ["celery"]
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_worker_stats_no_workers(self, mock_app):
-        """Test get_worker_stats with no workers."""
-        mock_inspect = Mock()
-        mock_inspect.ping.return_value = None
-        mock_inspect.active.return_value = None
-        mock_inspect.reserved.return_value = None
-        mock_inspect.active_queues.return_value = None
-        mock_app.control.inspect.return_value = mock_inspect
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_worker_stats()
-
-        assert result == []
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_worker_stats_exception_handling(self, mock_app):
-        """Test get_worker_stats handles exceptions gracefully."""
-        mock_app.control.inspect.side_effect = Exception("Connection error")
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_worker_stats()
-
-        assert result == []
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_reserved_tasks_returns_typed_list(self, mock_app):
-        """Test get_reserved_tasks returns a list of ReservedTask dataclasses."""
-        mock_inspect = Mock()
-        mock_inspect.reserved.return_value = {
-            "worker1@host": [
-                {
-                    "id": "abc-123",
-                    "name": "tasks.send_email",
-                    "hostname": "worker1@host",
-                    "args": ["user@example.com"],
-                    "kwargs": {"subject": "Hello"},
-                },
-                {
-                    "id": "def-456",
-                    "name": "tasks.generate_report",
-                    "hostname": "worker1@host",
-                    "args": [],
-                    "kwargs": {"report_id": 99},
-                },
-            ],
-            "worker2@host": [
-                {
-                    "id": "ghi-789",
-                    "name": "tasks.process_payment",
-                    "hostname": "worker2@host",
-                    "args": [500],
-                    "kwargs": {"currency": "USD"},
-                },
-            ],
-        }
-        mock_app.control.inspect.return_value = mock_inspect
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_reserved_tasks()
-
-        assert len(result) == 3
-        assert all(isinstance(t, ReservedTask) for t in result)
-        # Results sorted by worker name
-        assert result[0].worker == "worker1@host"
-        assert result[0].id == "abc-123"
-        assert result[0].name == "tasks.send_email"
-        assert result[0].hostname == "worker1@host"
-        assert result[0].args == ["user@example.com"]
-        assert result[0].kwargs == {"subject": "Hello"}
-        assert result[1].id == "def-456"
-        assert result[2].worker == "worker2@host"
-        assert result[2].id == "ghi-789"
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_reserved_tasks_empty(self, mock_app):
-        """Test get_reserved_tasks returns empty list when no reserved tasks."""
-        mock_inspect = Mock()
-        mock_inspect.reserved.return_value = {}
-        mock_app.control.inspect.return_value = mock_inspect
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_reserved_tasks()
-
-        assert result == []
-
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
-    def test_get_reserved_tasks_exception_handling(self, mock_app):
-        """Test get_reserved_tasks returns empty list on error."""
-        mock_app.control.inspect.side_effect = Exception("Broker unreachable")
-
-        monitor = WorkersCeleryResultsMonitor()
-        result = monitor.get_reserved_tasks()
-
-        assert result == []
 
 
 @pytest.mark.skipif(
@@ -322,11 +130,11 @@ class TestDjangoCeleryResultsMonitor:
 
         result = monitor.get_recent_tasks(status="SUCCESS")
 
-        assert isinstance(result, RecentTasksData)
-        assert len(result.recent_tasks) == 3
-        assert all(task.status == "SUCCESS" for task in result.recent_tasks)
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert all(task.status == "SUCCESS" for task in result)
         # Verify the task IDs match
-        task_ids = {task.task_id for task in result.recent_tasks}
+        task_ids = {task.task_id for task in result}
         expected_ids = {task.task_id for task in success_tasks}
         assert task_ids == expected_ids
 
@@ -346,12 +154,10 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
 
-        assert len(result.recent_tasks) == 1
-        assert result.recent_tasks[0].task_id == "test-task-123"
-        assert result.recent_tasks[0].execution_time is not None
-        assert (
-            9.0 <= result.recent_tasks[0].execution_time <= 11.0
-        )  # Should be around 10 seconds
+        assert len(result) == 1
+        assert result[0].task_id == "test-task-123"
+        assert result[0].execution_time is not None
+        assert 9.0 <= result[0].execution_time <= 11.0  # Should be around 10 seconds
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_no_execution_time(self):
@@ -368,9 +174,9 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks()
 
-        assert len(result.recent_tasks) == 1
-        assert result.recent_tasks[0].task_id == "test-task-456"
-        assert result.recent_tasks[0].execution_time is None
+        assert len(result) == 1
+        assert result[0].task_id == "test-task-456"
+        assert result[0].execution_time is None
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_includes_task_names_and_workers(self):
@@ -380,15 +186,17 @@ class TestDjangoCeleryResultsMonitor:
         TaskResultFactory(task_name="tasks.add", worker="worker1@host")  # duplicate
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_recent_tasks()
+        monitor.get_recent_tasks()
+        task_names = monitor.get_tasks_names()
+        workers = monitor.get_workers_names()
 
-        assert len(result.task_names) == 2
-        assert "tasks.add" in result.task_names
-        assert "tasks.process" in result.task_names
+        assert len(task_names) == 2
+        assert "tasks.add" in task_names
+        assert "tasks.process" in task_names
 
-        assert len(result.workers) == 2
-        assert "worker1@host" in result.workers
-        assert "worker2@host" in result.workers
+        assert len(workers) == 2
+        assert "worker1@host" in workers
+        assert "worker2@host" in workers
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_with_task_name_filter(self):
@@ -399,8 +207,8 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks(task_name="tasks.add")
 
-        assert len(result.recent_tasks) == 3
-        assert all(task.task_name == "tasks.add" for task in result.recent_tasks)
+        assert len(result) == 3
+        assert all(task.task_name == "tasks.add" for task in result)
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_with_worker_filter(self):
@@ -411,8 +219,8 @@ class TestDjangoCeleryResultsMonitor:
         monitor = DjangoCeleryResultsMonitor()
         result = monitor.get_recent_tasks(worker="worker1@host")
 
-        assert len(result.recent_tasks) == 4
-        assert all(task.worker == "worker1@host" for task in result.recent_tasks)
+        assert len(result) == 4
+        assert all(task.worker == "worker1@host" for task in result)
 
     @pytest.mark.django_db(transaction=True)
     def test_get_recent_tasks_limit(self):
@@ -423,7 +231,7 @@ class TestDjangoCeleryResultsMonitor:
         result = monitor.get_recent_tasks()
 
         # Default limit should be 50
-        assert len(result.recent_tasks) <= 50
+        assert len(result) <= 50
 
     @pytest.mark.django_db(transaction=True)
     @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
@@ -944,3 +752,91 @@ class TestDjangoCeleryResultsMonitor:
         assert len(result) == 2
         assert result[0].task_name == "tasks.fast"
         assert result[1].task_name == "tasks.slow"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_task_detail_found(self):
+        TaskResultFactory(
+            task_id="detail-task-1",
+            task_name="tasks.add",
+            status="SUCCESS",
+            worker="worker1@host",
+        )
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_detail("detail-task-1")
+
+        assert result is not None
+        assert result.task_id == "detail-task-1"
+        assert result.task_name == "tasks.add"
+        assert result.status == "SUCCESS"
+        assert result.worker == "worker1@host"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_task_detail_not_found_falls_back_to_workers_monitor(self):
+        monitor = DjangoCeleryResultsMonitor()
+        with patch.object(
+            monitor.workers_monitor, "get_task_detail", return_value=None
+        ):
+            result = monitor.get_task_detail("nonexistent-id")
+        assert result is None
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_returns_paginated_results(self):
+        TaskResultFactory.create_batch(10, status="SUCCESS")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(page=0, page_size=5)
+
+        assert result.total == 10
+        assert len(result.tasks) == 5
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_second_page(self):
+        TaskResultFactory.create_batch(10, status="SUCCESS")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(page=1, page_size=5)
+
+        assert result.total == 10
+        assert len(result.tasks) == 5
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_status(self):
+        TaskResultFactory.create_batch(3, status="SUCCESS")
+        TaskResultFactory.create_batch(2, status="FAILURE")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(status="SUCCESS")
+
+        assert result.total == 3
+        assert all(t.status == "SUCCESS" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_task_name(self):
+        TaskResultFactory.create_batch(3, task_name="tasks.add")
+        TaskResultFactory.create_batch(2, task_name="tasks.process")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(task_name="tasks.add")
+
+        assert result.total == 3
+        assert all(t.task_name == "tasks.add" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_worker(self):
+        TaskResultFactory.create_batch(4, worker="worker1@host")
+        TaskResultFactory.create_batch(2, worker="worker2@host")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(worker="worker1@host")
+
+        assert result.total == 4
+        assert all(t.worker == "worker1@host" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_empty(self):
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks()
+
+        assert result.total == 0
+        assert result.tasks == []

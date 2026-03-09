@@ -10,12 +10,18 @@ from django.utils import timezone
 
 from celery_monitor.models import (
     DashboardStatusCount,
-    RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
     TaskOverview,
     TasksPage,
     WorkerStats,
+)
+from celery_monitor.redis_keys import (
+    REDIS_KEY_RECENT_TASKS,
+    REDIS_KEY_STATUS_COUNTS,
+    REDIS_KEY_TASK_DETAILS,
+    REDIS_KEY_TASKS_NAMES,
+    REDIS_KEY_WORKERS_NAMES,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
@@ -47,40 +53,27 @@ class RedisResultsMonitor(CeleryResultsMonitor):
 
     def __init__(self):
         super().__init__()
-        self._redis_client = None
+        self.client = self._init_client()
         self.workers_monitor = WorkersCeleryResultsMonitor()
 
-    def _get_redis_client(self) -> redis.Redis | None:
-        if self._redis_client is not None:
-            return self._redis_client
-
-        try:
-            redis_url = current_app.conf.broker_url or current_app.conf.result_backend
-            if not redis_url:
-                logger.warning(
-                    "Cannot initialize Redis client. Celery broker_url or result_backend must be set and use Redis"
-                )
-                return None
-
-            self._redis_client = redis.from_url(
-                redis_url,
-                decode_responses=True,
-                socket_connect_timeout=3,
+    def _init_client(self) -> redis.Redis:
+        redis_url = current_app.conf.broker_url or current_app.conf.result_backend
+        if not redis_url:
+            raise ValueError(
+                "Cannot initialize Redis client. Celery broker_url or result_backend must be set and use Redis"
             )
-            return self._redis_client
-        except Exception as e:
-            logger.warning("Could not connect to Redis: %s", e)
-            return None
+
+        return redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=3,
+        )
 
     def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
         return self.workers_monitor.get_worker_stats(include_offline)
 
     def get_overall_status_counts(self) -> list[DashboardStatusCount]:
-        client = self._get_redis_client()
-        if not client:
-            return []
-
-        counts: dict = client.hgetall("celery:monitor:status_counts")
+        counts: dict = self.client.hgetall(REDIS_KEY_STATUS_COUNTS)
         stats = [
             DashboardStatusCount(status=status, count=int(count))
             for status, count in sorted(counts.items())
@@ -89,40 +82,28 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         return [DashboardStatusCount("total", total), *stats]
 
     def get_last_hour_status_counts(self) -> list[DashboardStatusCount]:
-        client = self._get_redis_client()
-        if not client:
-            return []
-
-        # Get tasks from the last hour using sorted set
         now = timezone.now()
         hour_ago = now - timedelta(hours=1)
-        task_ids = client.zrangebyscore(
-            "celery:monitor:tasks:recent", hour_ago.timestamp(), now.timestamp()
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, hour_ago.timestamp(), now.timestamp()
         )
 
         status_counts = defaultdict(int)
-        total = 0
 
         if task_ids:
-            pipeline = client.pipeline()
+            pipeline = self.client.pipeline()
             for task_id in task_ids:
-                pipeline.hget(f"celery:monitor:tasks:{task_id}", "status")
+                pipeline.hget(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "status")
 
-            statuses = pipeline.execute()
-
-            for status in statuses:
-                if not status:
-                    continue
-
-                status_counts[status] += 1
-                total += 1
+            for status in pipeline.execute():
+                if status:
+                    status_counts[status] += 1
 
         stats = [
             DashboardStatusCount(status=status, count=count)
             for status, count in sorted(status_counts.items())
         ]
-
-        return [DashboardStatusCount("total", total), *stats]
+        return [DashboardStatusCount("total", sum(status_counts.values())), *stats]
 
     def get_task_execution_stats(
         self,
@@ -131,102 +112,61 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
-        """Get task execution statistics."""
-        client = self._get_redis_client()
-        if not client:
-            return []
-
         start_time = date_from.timestamp() if date_from else float("-inf")
         end_time = date_to.timestamp() if date_to else float("inf")
 
-        task_ids = client.zrangebyscore(
-            "celery:monitor:tasks:recent", start_time, end_time
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, start_time, end_time
         )
         if not task_ids:
             return []
 
-        pipeline = client.pipeline()
+        pipeline = self.client.pipeline()
         for task_id in task_ids:
-            pipeline.hgetall(f"celery:monitor:tasks:{task_id}")
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
 
-        tasks = pipeline.execute()
+        stats_by_name = defaultdict(
+            lambda: {
+                "total": 0,
+                "success": 0,
+                "failure": 0,
+                "runtimes": [],
+            }
+        )
 
-        stats_by_name = {}
-
-        for task_data in tasks:
+        for task_data in pipeline.execute():
             task_name = task_data.get("task_name")
             if not task_name:
                 continue
 
-            if task_name not in stats_by_name:
-                stats_by_name[task_name] = {
-                    "total": 0,
-                    "success": 0,
-                    "failure": 0,
-                    "runtimes": [],
-                }
-
             stats_by_name[task_name]["total"] += 1
-
             status = task_data.get("status")
             if status == "SUCCESS":
                 stats_by_name[task_name]["success"] += 1
             elif status == "FAILURE":
                 stats_by_name[task_name]["failure"] += 1
+            stats_by_name[task_name]["runtimes"].append(get_execution_time(task_data))
 
-            # Calculate runtime if available
-            execution_time = get_execution_time(task_data)
-            stats_by_name[task_name]["runtimes"].append(execution_time)
-
-        # Convert to TaskExecutionStats
         result = []
         for task_name, data in stats_by_name.items():
             runtimes = [r for r in data["runtimes"] if r]
-            avg_runtime = sum(runtimes) / len(runtimes) if runtimes else None
-            min_runtime = min(runtimes) if runtimes else None
-            max_runtime = max(runtimes) if runtimes else None
-
             result.append(
                 TaskExecutionStats(
                     task_name=task_name,
                     total_count=data["total"],
                     success_count=data["success"],
                     failure_count=data["failure"],
-                    avg_runtime=avg_runtime,
-                    min_runtime=min_runtime,
-                    max_runtime=max_runtime,
+                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
+                    min_runtime=min(runtimes) if runtimes else None,
+                    max_runtime=max(runtimes) if runtimes else None,
                 )
             )
 
-        reverse = sort_order == "desc"
-        result = sorted(
+        return sorted(
             result,
-            key=lambda x: (
-                getattr(x, sort_by, None)
-                if getattr(x, sort_by, None) is not None
-                else -1
-            ),
-            reverse=reverse,
+            key=lambda x: getattr(x, sort_by, None) or -1,
+            reverse=(sort_order == "desc"),
         )
-        return result
-
-    def get_paginated_tasks(
-        self, page_number: int = 0, page_size: int = 50
-    ) -> list[TaskOverview]:
-        client = self._get_redis_client()
-        if not client:
-            return []
-
-        start = page_number * page_size
-        task_ids = client.zrevrange(
-            "celery:monitor:tasks:recent",
-            start=start,
-            end=start + page_size,
-        )
-        if not task_ids:
-            return []
-
-        return self._get_tasks_overviews(task_ids)
 
     def get_recent_tasks(
         self,
@@ -234,40 +174,24 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         task_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
-    ) -> RecentTasksData:
+    ) -> list[TaskOverview]:
         """
         Get recent tasks from Redis, if filtering is applied this function will return
         always less results than limit, because filtering is happening after fetching the data from redis.
         """
-        client = self._get_redis_client()
-        if not client:
-            return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
-
-        # Get recent task IDs (sorted by timestamp, newest first)
-        task_ids = client.zrevrange("celery:monitor:tasks:recent", 0, limit * 2 - 1)
+        task_ids = self.client.zrevrange(REDIS_KEY_RECENT_TASKS, 0, limit * 2 - 1)
         if not task_ids:
-            return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+            return []
 
-        pipeline = client.pipeline()
+        pipeline = self.client.pipeline()
         for task_id in task_ids:
-            pipeline.hgetall(f"celery:monitor:tasks:{task_id}")
-
-        tasks = pipeline.execute()
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
 
         recent_tasks = []
-        task_names_set = set()
-        workers_set = set()
-
-        for task_data in tasks:
-            # Apply filters
+        for task_data in pipeline.execute():
             task_status = task_data.get("status")
             task_name_value = task_data.get("task_name")
             task_worker = task_data.get("worker")
-
-            if task_name_value:
-                task_names_set.add(task_name_value)
-            if task_worker:
-                workers_set.add(task_worker)
 
             if status and task_status != status:
                 continue
@@ -276,42 +200,28 @@ class RedisResultsMonitor(CeleryResultsMonitor):
             if worker and task_worker != worker:
                 continue
 
-            execution_time = get_execution_time(task_data)
-            date_started = get_timestamp(task_data, "date_started")
-            date_done = get_timestamp(task_data, "date_done")
-
             recent_tasks.append(
                 TaskOverview(
                     task_id=task_data.get("task_id"),
                     task_name=task_name_value,
                     status=task_status,
                     worker=task_worker,
-                    date_started=date_started,
-                    date_done=date_done,
-                    execution_time=execution_time,
+                    date_started=get_timestamp(task_data, "date_started"),
+                    date_done=get_timestamp(task_data, "date_done"),
+                    execution_time=get_execution_time(task_data),
                 )
             )
 
-        all_task_names = client.smembers("celery:monitor:task_names")
-        all_workers = client.smembers("celery:monitor:workers")
+        return recent_tasks
 
-        return RecentTasksData(
-            recent_tasks=recent_tasks,
-            task_names=sorted(all_task_names or task_names_set),
-            workers=sorted(all_workers or workers_set),
-        )
-
-    def get_task_detail(self, task_id: str):
+    def get_task_detail(self, task_id: str) -> TaskDetail | None:
         """Get detailed information about a specific task from Redis."""
-        client = self._get_redis_client()
-        if not client:
-            return None
-
-        task_data: dict = client.hgetall(f"celery:monitor:tasks:{task_id}")
+        task_data: dict = self.client.hgetall(
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id)
+        )
         if not task_data:
             return self.workers_monitor.get_task_detail(task_id)
 
-        # Convert timestamps to datetime objects for display
         date_started = get_timestamp(task_data, "date_started")
         date_done = get_timestamp(task_data, "date_done")
         date_created = get_timestamp(task_data, "date_created")
@@ -344,47 +254,36 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         page: int = 0,
         page_size: int = 50,
     ) -> TasksPage:
-        client = self._get_redis_client()
-        if not client:
-            return TasksPage(tasks=[], total=0, task_names=[], workers=[])
+        start = page * page_size
 
-        has_date_filter = bool(date_from or date_to)
-
-        if has_date_filter:
+        if date_from or date_to:
             start_time = date_from.timestamp() if date_from else float("-inf")
             end_time = date_to.timestamp() if date_to else float("inf")
-            all_task_ids = client.zrangebyscore(
-                "celery:monitor:tasks:recent",
-                start_time,
-                end_time,
+            all_task_ids = list(
+                reversed(
+                    self.client.zrangebyscore(
+                        REDIS_KEY_RECENT_TASKS,
+                        start_time,
+                        end_time,
+                    )
+                )
             )
-            # Reverse to get newest first, then paginate
-            all_task_ids = list(reversed(all_task_ids))
             total = len(all_task_ids)
-            start = page * page_size
             task_ids = all_task_ids[start : start + page_size]
         else:
-            total = client.zcard("celery:monitor:tasks:recent")
-            start = page * page_size
-            task_ids = client.zrevrange(
-                "celery:monitor:tasks:recent",
+            total = self.client.zcard(REDIS_KEY_RECENT_TASKS)
+            task_ids = self.client.zrevrange(
+                REDIS_KEY_RECENT_TASKS,
                 start=start,
                 end=start + page_size - 1,
             )
 
-        tasks = self._get_tasks_overviews(task_ids)
-        return TasksPage(tasks=tasks, total=total, task_names=[], workers=[])
+        return TasksPage(tasks=self._get_tasks_overviews(task_ids), total=total)
 
-    def _get_tasks_overviews(self, task_ids: str) -> list[TaskOverview]:
-        client = self._get_redis_client()
-        if not client:
-            return []
-
-        pipeline = client.pipeline()
+    def _get_tasks_overviews(self, task_ids: list[str]) -> list[TaskOverview]:
+        pipeline = self.client.pipeline()
         for task_id in task_ids:
-            pipeline.hgetall(f"celery:monitor:tasks:{task_id}")
-
-        tasks = pipeline.execute()
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
 
         return [
             TaskOverview(
@@ -396,8 +295,14 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 date_done=get_timestamp(task_data, "date_done"),
                 execution_time=get_execution_time(task_data),
             )
-            for task_data in tasks
+            for task_data in pipeline.execute()
         ]
+
+    def get_tasks_names(self) -> list[str]:
+        return sorted(self.client.smembers(REDIS_KEY_TASKS_NAMES))
+
+    def get_workers_names(self) -> list[str]:
+        return sorted(self.client.smembers(REDIS_KEY_WORKERS_NAMES))
 
 
 def get_execution_time(task_data: dict) -> float | None:

@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 .tox
+.coverage
 
 # Virtual environments
 .venv

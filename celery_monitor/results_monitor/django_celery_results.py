@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 
+from django.core.cache import cache
 from django.db.models import Avg, Count, F, Max, Min, Q
 from django.utils import timezone
 from django_celery_results.models import TaskResult
@@ -8,7 +9,6 @@ from django_celery_results.models import TaskResult
 from celery_monitor.models import (
     CeleryStatusCount,
     DashboardStatusCount,
-    RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
     TaskOverview,
@@ -108,34 +108,47 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     date_to = timezone.make_aware(date_to)
                 queryset = queryset.filter(date_done__lte=date_to)
 
-            stats = queryset.values("task_name").annotate(
-                total_count=Count("id"),
-                success_count=Count("id", filter=Q(status="SUCCESS")),
-                failure_count=Count("id", filter=Q(status="FAILURE")),
-                avg_runtime=Avg(
-                    F("date_done") - F("date_started"),
-                    filter=Q(
-                        status="SUCCESS",
-                        date_started__isnull=False,
-                        date_done__isnull=False,
+            runtime_fields = {"avg_runtime", "min_runtime", "max_runtime"}
+            if sort_by in runtime_fields:
+                if sort_order == "desc":
+                    order_expr = F(sort_by).desc(nulls_last=True)
+                else:
+                    order_expr = F(sort_by).asc(nulls_first=True)
+            else:
+                order_expr = f"-{sort_by}" if sort_order == "desc" else sort_by
+
+            stats = (
+                queryset.values("task_name")
+                .annotate(
+                    total_count=Count("id"),
+                    success_count=Count("id", filter=Q(status="SUCCESS")),
+                    failure_count=Count("id", filter=Q(status="FAILURE")),
+                    avg_runtime=Avg(
+                        F("date_done") - F("date_started"),
+                        filter=Q(
+                            status="SUCCESS",
+                            date_started__isnull=False,
+                            date_done__isnull=False,
+                        ),
                     ),
-                ),
-                min_runtime=Min(
-                    F("date_done") - F("date_started"),
-                    filter=Q(
-                        status="SUCCESS",
-                        date_started__isnull=False,
-                        date_done__isnull=False,
+                    min_runtime=Min(
+                        F("date_done") - F("date_started"),
+                        filter=Q(
+                            status="SUCCESS",
+                            date_started__isnull=False,
+                            date_done__isnull=False,
+                        ),
                     ),
-                ),
-                max_runtime=Max(
-                    F("date_done") - F("date_started"),
-                    filter=Q(
-                        status="SUCCESS",
-                        date_started__isnull=False,
-                        date_done__isnull=False,
+                    max_runtime=Max(
+                        F("date_done") - F("date_started"),
+                        filter=Q(
+                            status="SUCCESS",
+                            date_started__isnull=False,
+                            date_done__isnull=False,
+                        ),
                     ),
-                ),
+                )
+                .order_by(order_expr)
             )
 
             result = []
@@ -164,31 +177,6 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     )
                 )
 
-            reverse = sort_order == "desc"
-            if sort_by == "task_name":
-                result.sort(key=lambda x: x.task_name, reverse=reverse)
-            elif sort_by == "total_count":
-                result.sort(key=lambda x: x.total_count, reverse=reverse)
-            elif sort_by == "success_count":
-                result.sort(key=lambda x: x.success_count, reverse=reverse)
-            elif sort_by == "failure_count":
-                result.sort(key=lambda x: x.failure_count, reverse=reverse)
-            elif sort_by == "avg_runtime":
-                result.sort(
-                    key=lambda x: x.avg_runtime if x.avg_runtime is not None else -1,
-                    reverse=reverse,
-                )
-            elif sort_by == "min_runtime":
-                result.sort(
-                    key=lambda x: x.min_runtime if x.min_runtime is not None else -1,
-                    reverse=reverse,
-                )
-            elif sort_by == "max_runtime":
-                result.sort(
-                    key=lambda x: x.max_runtime if x.max_runtime is not None else -1,
-                    reverse=reverse,
-                )
-
             return result
 
         except Exception as e:
@@ -201,7 +189,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         task_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
-    ) -> RecentTasksData:
+    ) -> list[TaskOverview]:
         try:
             qs = TaskResult.objects.all()
 
@@ -214,7 +202,6 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
 
             recent_tasks_qs = qs.order_by("-date_done")[:limit]
 
-            # Convert to RecentTask dataclass
             recent_tasks = []
             for task in recent_tasks_qs:
                 execution_time = None
@@ -239,29 +226,11 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     )
                 )
 
-            # Get distinct task names and workers for filter dropdowns
-            task_names = list(
-                TaskResult.objects.exclude(task_name__isnull=True)
-                .values_list("task_name", flat=True)
-                .distinct()
-                .order_by("task_name")
-            )
-            workers = list(
-                TaskResult.objects.exclude(worker__isnull=True)
-                .values_list("worker", flat=True)
-                .distinct()
-                .order_by("worker")
-            )
-
-            return RecentTasksData(
-                recent_tasks=recent_tasks,
-                task_names=task_names,
-                workers=workers,
-            )
+            return recent_tasks
 
         except Exception as e:
             logger.exception("Error getting recent tasks: %s", e)
-            return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+            return []
 
     def get_task_detail(self, task_id: str) -> TaskDetail | None:
         """Get detailed information about a specific task from django-celery-results."""
@@ -312,7 +281,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
             if worker:
                 qs = qs.filter(worker=worker)
             if date_from:
-                qs = qs.filter(date_done__lte=date_from)
+                qs = qs.filter(date_done__gte=date_from)
             if date_to:
                 qs = qs.filter(date_done__lte=date_to)
 
@@ -343,23 +312,32 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     )
                 )
 
-            task_names = list(
+            return TasksPage(tasks=tasks, total=total)
+
+        except Exception as e:
+            logger.exception("Error getting tasks: %s", e)
+            return TasksPage(tasks=[], total=0)
+
+    def get_tasks_names(self) -> list[str]:
+        return cache.get_or_set(
+            "celery_monitor:task_names",
+            lambda: list(
                 TaskResult.objects.exclude(task_name__isnull=True)
                 .values_list("task_name", flat=True)
                 .distinct()
                 .order_by("task_name")
-            )
-            workers = list(
+            ),
+            timeout=60,
+        )
+
+    def get_workers_names(self) -> list[str]:
+        return cache.get_or_set(
+            "celery_monitor:worker_names",
+            lambda: list(
                 TaskResult.objects.exclude(worker__isnull=True)
                 .values_list("worker", flat=True)
                 .distinct()
                 .order_by("worker")
-            )
-
-            return TasksPage(
-                tasks=tasks, total=total, task_names=task_names, workers=workers
-            )
-
-        except Exception as e:
-            logger.exception("Error getting tasks: %s", e)
-            return TasksPage(tasks=[], total=0, task_names=[], workers=[])
+            ),
+            timeout=60,
+        )
