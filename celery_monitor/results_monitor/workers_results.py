@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from celery import current_app
 
@@ -7,6 +8,7 @@ from celery_monitor.models import (
     RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    TasksPage,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
@@ -26,7 +28,9 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
     def get_last_hour_status_counts(self) -> list[DashboardStatusCount]:
         return []
 
-    def get_worker_stats(self, include_offline: bool = False) -> list[WorkerStats]:
+    def get_worker_stats(
+        self, include_offline: bool | None = None
+    ) -> list[WorkerStats]:
         try:
             inspect = current_app.control.inspect(timeout=1.0)
 
@@ -80,11 +84,10 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
 
     def get_task_execution_stats(
         self,
-        hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
         return []
 
@@ -99,3 +102,15 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
 
     def get_task_detail(self, task_id: str) -> TaskDetail | None:
         return None
+
+    def get_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        page: int = 0,
+        page_size: int = 50,
+    ) -> TasksPage:
+        return TasksPage(tasks=[], total=0, task_names=[], workers=[])

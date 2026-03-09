@@ -7,26 +7,26 @@
 {% endblock %}
 {% block content %}
     <form class="filters" method="get" id="time-range-form">
-        <input type="hidden" name="hours" id="hours" value="{{ current_hours }}">
+        <input type="hidden" name="hours" id="hours" value="{{ filters.hours_param }}">
         <div class="filter-group">
             <label>Time Range:</label>
-            <button type="button"
+            <button type="button" {% if filters.hours_param == '1' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=1; document.getElementById('time-range-form').submit();">
                 1h
             </button>
-            <button type="button"
+            <button type="button" {% if filters.hours_param == '24' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=24; document.getElementById('time-range-form').submit();">
                 24h
             </button>
-            <button type="button"
+            <button type="button" {% if filters.hours_param == '168' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=168; document.getElementById('time-range-form').submit();">
                 7d
             </button>
-            <button type="button"
+            <button type="button" {% if filters.hours_param == '720' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=720; document.getElementById('time-range-form').submit();">
                 30d
             </button>
-            <button type="button"
+            <button type="button" {% if filters.hours_param == 'all' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value='all'; document.getElementById('time-range-form').submit();">
                 All
             </button>
@@ -36,12 +36,12 @@
             <input type="datetime-local"
                    name="date_from"
                    id="date_from"
-                   value="{{ date_from }}">
+                   value="{{ filters.date_from }}">
             <span>to</span>
             <input type="datetime-local"
                    name="date_to"
                    id="date_to"
-                   value="{{ date_to }}">
+                   value="{{ filters.date_to }}">
             <button type="submit" onclick="clearHoursParam();">Apply</button>
         </div>
     </form>
@@ -60,80 +60,52 @@ function clearHoursParam() {
             <thead>
                 <tr>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=task_name&order={% if request.GET.sort == 'task_name' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Task Type
-                            {% if request.GET.sort == 'task_name' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=task_name&order={% if filters.sort_by == 'task_name' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Task Type
+                            {% if filters.sort_by == 'task_name' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=total_count&order={% if request.GET.sort == 'total_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Total
-                            {% if request.GET.sort == 'total_count' or not request.GET.sort %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=total_count&order={% if filters.sort_by == 'total_count' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Total
+                            {% if filters.sort_by == 'total_count' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=success_count&order={% if request.GET.sort == 'success_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Success
-                            {% if request.GET.sort == 'success_count' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=success_count&order={% if filters.sort_by == 'success_count' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Success
+                            {% if filters.sort_by == 'success_count' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=failure_count&order={% if request.GET.sort == 'failure_count' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Failure
-                            {% if request.GET.sort == 'failure_count' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=failure_count&order={% if filters.sort_by == 'failure_count' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Failure
+                            {% if filters.sort_by == 'failure_count' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>Success Rate</th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=min_runtime&order={% if request.GET.sort == 'min_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Min Runtime
-                            {% if request.GET.sort == 'min_runtime' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=min_runtime&order={% if filters.sort_by == 'min_runtime' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Min Runtime
+                            {% if filters.sort_by == 'min_runtime' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=avg_runtime&order={% if request.GET.sort == 'avg_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Avg Runtime
-                            {% if request.GET.sort == 'avg_runtime' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=avg_runtime&order={% if filters.sort_by == 'avg_runtime' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Avg Runtime
+                            {% if filters.sort_by == 'avg_runtime' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="?{% if date_from and date_to %}date_from={{ date_from }}&date_to={{ date_to }}{% else %}hours={{ request.GET.hours|default:'1' }}{% endif %}&sort=max_runtime&order={% if request.GET.sort == 'max_runtime' and request.GET.order == 'asc' %}desc{% else %}asc{% endif %}">Max Runtime
-                            {% if request.GET.sort == 'max_runtime' %}
-                                {% if request.GET.order == 'asc' %}
-                                    ▲
-                                {% else %}
-                                    ▼
-                                {% endif %}
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=max_runtime&order={% if filters.sort_by == 'max_runtime' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Max Runtime
+                            {% if filters.sort_by == 'max_runtime' %}
+                                {% if filters.sort_order == 'asc' %}▲{% else %}▼{% endif %}
                             {% endif %}
                         </a>
                     </th>

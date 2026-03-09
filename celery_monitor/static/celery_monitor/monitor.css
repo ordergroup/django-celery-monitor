@@ -316,6 +316,24 @@
 .filters button:hover {
   background: var(--darkened-bg, #e9ecef);
 }
+.filters button.active {
+  background: var(--header-bg, #417690);
+  color: #fff;
+  border-color: var(--header-bg, #417690);
+}
+.dark .filters button.active,
+[data-theme="dark"] .filters button.active {
+  background: #4f86a0;
+  border-color: #4f86a0;
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  .filters button.active {
+    background: #4f86a0;
+    border-color: #4f86a0;
+    color: #fff;
+  }
+}
 .filters label {
   font-weight: bold;
   font-size: 13px;
@@ -683,4 +701,84 @@ pre.code-block {
 .task-id-mono {
   font-family: monospace;
   font-size: 13px;
+}
+
+/* ── Task results page ────────────────────────────────────── */
+
+.filters--rows {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.filters--rows .filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.filters input[type="datetime-local"] {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  background: var(--body-bg, #fff);
+  color: var(--body-fg, #333);
+  font-size: 13px;
+}
+.filters a {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--link-fg, #417690);
+  text-decoration: none;
+}
+.filters a:hover { text-decoration: underline; }
+
+.info-box {
+  background: var(--darkened-bg, #f8f9fa);
+  border-left: 4px solid var(--link-fg, #417690);
+  padding: 10px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--body-fg, #333);
+}
+.dark .info-box,
+[data-theme="dark"] .info-box {
+  background: rgb(39 39 42);
+}
+
+.table-meta {
+  font-size: 12px;
+  color: var(--body-quiet-color, #666);
+  margin-bottom: 8px;
+}
+
+/* ── Pagination ───────────────────────────────────────────── */
+
+.pagination {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.pagination a {
+  padding: 5px 10px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  color: var(--link-fg, #417690);
+  text-decoration: none;
+  background: var(--body-bg, #fff);
+}
+.pagination a:hover {
+  background: var(--darkened-bg, #e9ecef);
+}
+.pagination-current {
+  padding: 5px 10px;
+  font-weight: 600;
+  color: var(--body-fg, #333);
+}
+.dark .pagination a,
+[data-theme="dark"] .pagination a {
+  background: rgb(39 39 42);
+  border-color: rgb(63 63 70);
 }

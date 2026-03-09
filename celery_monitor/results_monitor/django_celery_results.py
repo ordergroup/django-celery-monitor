@@ -1,3 +1,4 @@
+from django.utils.timezone import is_naive
 import logging
 from datetime import datetime, timedelta
 
@@ -8,10 +9,11 @@ from django_celery_results.models import TaskResult
 from celery_monitor.models import (
     CeleryStatusCount,
     DashboardStatusCount,
-    RecentTask,
     RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    TaskOverview,
+    TasksPage,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
@@ -90,33 +92,22 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
 
     def get_task_execution_stats(
         self,
-        hours: int | None = 1,
         sort_by: str = "total_count",
         sort_order: str = "desc",
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
         try:
             queryset = TaskResult.objects.all()
 
-            if date_from and date_to:
-                try:
-                    date_from_dt = datetime.fromisoformat(date_from)
-                    date_to_dt = datetime.fromisoformat(date_to)
-                    if timezone.is_naive(date_from_dt):
-                        date_from_dt = timezone.make_aware(date_from_dt)
-                    if timezone.is_naive(date_to_dt):
-                        date_to_dt = timezone.make_aware(date_to_dt)
-                    queryset = queryset.filter(
-                        date_done__gte=date_from_dt, date_done__lte=date_to_dt
-                    )
-                except (ValueError, TypeError):
-                    if hours is not None:
-                        time_threshold = timezone.now() - timedelta(hours=hours)
-                        queryset = queryset.filter(date_done__gte=time_threshold)
-            elif hours is not None:
-                time_threshold = timezone.now() - timedelta(hours=hours)
-                queryset = queryset.filter(date_done__gte=time_threshold)
+            if date_from:
+                if timezone.is_naive(date_from):
+                    date_from = timezone.make_aware(date_from)
+                queryset = queryset.filter(date_done__gte=date_from)
+            if date_to:
+                if timezone.is_naive(date_to):
+                    date_to = timezone.make_aware(date_to)
+                queryset = queryset.filter(date_done__lte=date_to)
 
             stats = queryset.values("task_name").annotate(
                 total_count=Count("id"),
@@ -235,7 +226,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     ).total_seconds()
 
                 recent_tasks.append(
-                    RecentTask(
+                    TaskOverview(
                         task_id=task.task_id,
                         task_name=task.task_name,
                         status=task.status,
@@ -298,3 +289,71 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         except Exception as e:
             logger.exception("Error getting task detail: %s", e)
             return None
+
+    def get_tasks(
+        self,
+        status: str | None = None,
+        task_name: str | None = None,
+        worker: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        page: int = 0,
+        page_size: int = 50,
+    ) -> TasksPage:
+        try:
+            qs = TaskResult.objects.all()
+
+            if status:
+                qs = qs.filter(status=status)
+            if task_name:
+                qs = qs.filter(task_name=task_name)
+            if worker:
+                qs = qs.filter(worker=worker)
+            if date_from:
+                qs = qs.filter(date_done__lte=date_to)
+            if date_to:
+                qs = qs.filter(date_done__lte=date_to)
+
+            total = qs.count()
+            offset = page * page_size
+            page_qs = qs.order_by("-date_done")[offset : offset + page_size]
+
+            tasks = []
+            for task in page_qs:
+                execution_time = None
+                if task.date_started and task.date_done:
+                    execution_time = (
+                        task.date_done - task.date_started
+                    ).total_seconds()
+                tasks.append(
+                    TaskOverview(
+                        task_id=task.task_id,
+                        task_name=task.task_name,
+                        status=task.status,
+                        worker=task.worker,
+                        date_started=task.date_started,
+                        date_done=task.date_done,
+                        execution_time=execution_time,
+                    )
+                )
+
+            task_names = list(
+                TaskResult.objects.exclude(task_name__isnull=True)
+                .values_list("task_name", flat=True)
+                .distinct()
+                .order_by("task_name")
+            )
+            workers = list(
+                TaskResult.objects.exclude(worker__isnull=True)
+                .values_list("worker", flat=True)
+                .distinct()
+                .order_by("worker")
+            )
+
+            return TasksPage(
+                tasks=tasks, total=total, task_names=task_names, workers=workers
+            )
+
+        except Exception as e:
+            logger.exception("Error getting tasks: %s", e)
+            return TasksPage(tasks=[], total=0, task_names=[], workers=[])

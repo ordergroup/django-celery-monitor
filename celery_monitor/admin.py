@@ -52,6 +52,11 @@ def patch_admin_site(site):
                 name="celery_monitor_task_execution_stats",
             ),
             path(
+                "celery-monitor/task-results",
+                site.admin_view(lambda req: views.task_results(req, site)),
+                name="celery_monitor_task_results",
+            ),
+            path(
                 "celery-monitor/task/<str:task_id>/",
                 site.admin_view(
                     lambda req, task_id: views.task_detail_view(req, site, task_id)
@@ -89,6 +94,7 @@ def patch_admin_site(site):
             execution_stats_url = reverse(
                 f"{site.name}:celery_monitor_task_execution_stats"
             )
+            task_results_url = reverse(f"{site.name}:celery_monitor_task_results")
 
             models = [
                 {
@@ -98,8 +104,14 @@ def patch_admin_site(site):
                     "view_only": True,
                 },
                 {
+                    "name": "Task Results",
+                    "object_name": "CeleryMonitorTaskResults",
+                    "admin_url": task_results_url,
+                    "view_only": True,
+                },
+                {
                     "name": "Task Execution Stats",
-                    "object_name": "TaskExecutionStats",
+                    "object_name": "CeleryMonitorTaskExecutionStats",
                     "admin_url": execution_stats_url,
                     "view_only": True,
                 },

@@ -372,7 +372,8 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 2
 
@@ -422,7 +423,8 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         assert result[0].task_name == "tasks.add"
@@ -477,7 +479,8 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         stats = result[0]
@@ -533,7 +536,8 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         stats = result[0]
@@ -566,7 +570,8 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         stats = result[0]
@@ -607,7 +612,8 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         stats = result[0]
@@ -645,8 +651,9 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
+        hour_ago = timezone.now() - timedelta(hours=1)
         result = monitor.get_task_execution_stats(
-            hours=1, sort_by="min_runtime", sort_order="asc"
+            date_from=hour_ago, sort_by="min_runtime", sort_order="asc"
         )
 
         assert len(result) == 2
@@ -654,7 +661,7 @@ class TestDjangoCeleryResultsMonitor:
         assert result[1].task_name == "tasks.slow"
 
         result_desc = monitor.get_task_execution_stats(
-            hours=1, sort_by="min_runtime", sort_order="desc"
+            date_from=hour_ago, sort_by="min_runtime", sort_order="desc"
         )
         assert result_desc[0].task_name == "tasks.slow"
         assert result_desc[1].task_name == "tasks.fast"
@@ -686,8 +693,9 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
+        hour_ago = timezone.now() - timedelta(hours=1)
         result = monitor.get_task_execution_stats(
-            hours=1, sort_by="max_runtime", sort_order="asc"
+            date_from=hour_ago, sort_by="max_runtime", sort_order="asc"
         )
 
         assert len(result) == 2
@@ -695,7 +703,7 @@ class TestDjangoCeleryResultsMonitor:
         assert result[1].task_name == "tasks.slow"
 
         result_desc = monitor.get_task_execution_stats(
-            hours=1, sort_by="max_runtime", sort_order="desc"
+            date_from=hour_ago, sort_by="max_runtime", sort_order="desc"
         )
         assert result_desc[0].task_name == "tasks.slow"
         assert result_desc[1].task_name == "tasks.fast"
@@ -719,7 +727,8 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(hours=1)
+        hour_ago = timezone.now() - timedelta(hours=1)
+        result = monitor.get_task_execution_stats(date_from=hour_ago)
 
         assert len(result) == 1
         stats = result[0]
@@ -766,12 +775,10 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        date_from = (now - timedelta(days=3)).isoformat()
-        date_to = (now - timedelta(days=1)).isoformat()
+        date_from = now - timedelta(days=3)
+        date_to = now - timedelta(days=1)
 
-        result = monitor.get_task_execution_stats(
-            hours=None, date_from=date_from, date_to=date_to
-        )
+        result = monitor.get_task_execution_stats(date_from=date_from, date_to=date_to)
 
         assert len(result) == 1
         assert result[0].task_name == "tasks.in_range"
@@ -795,53 +802,14 @@ class TestDjangoCeleryResultsMonitor:
             )
 
         monitor = DjangoCeleryResultsMonitor()
-        date_from = "2024-01-15T00:00:00"
-        date_to = "2024-01-15T23:59:59"
+        date_from = datetime.fromisoformat("2024-01-15T00:00:00")
+        date_to = datetime.fromisoformat("2024-01-15T23:59:59")
 
-        result = monitor.get_task_execution_stats(
-            hours=None, date_from=date_from, date_to=date_to
-        )
+        result = monitor.get_task_execution_stats(date_from=date_from, date_to=date_to)
 
         assert len(result) == 1
         assert result[0].task_name == "tasks.test"
         assert result[0].total_count == 2
-
-    @pytest.mark.django_db(transaction=True)
-    @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
-    def test_get_task_execution_stats_invalid_date_range_falls_back_to_hours(self):
-        """Test invalid date range falls back to hours parameter."""
-        now = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-
-        for _i in range(3):
-            task = TaskResultFactory.create(
-                task_name="tasks.recent",
-                status="SUCCESS",
-                date_started=now - timedelta(minutes=30, seconds=5),
-            )
-            TaskResult.objects.filter(pk=task.pk).update(
-                date_created=now - timedelta(minutes=30, seconds=6),
-                date_done=now - timedelta(minutes=30),
-            )
-
-        for _i in range(2):
-            task = TaskResultFactory.create(
-                task_name="tasks.old",
-                status="SUCCESS",
-                date_started=now - timedelta(hours=5, seconds=5),
-            )
-            TaskResult.objects.filter(pk=task.pk).update(
-                date_created=now - timedelta(hours=5, seconds=6),
-                date_done=now - timedelta(hours=5),
-            )
-
-        monitor = DjangoCeleryResultsMonitor()
-        result = monitor.get_task_execution_stats(
-            hours=1, date_from="invalid", date_to="invalid"
-        )
-
-        assert len(result) == 1
-        assert result[0].task_name == "tasks.recent"
-        assert result[0].total_count == 3
 
     @pytest.mark.django_db(transaction=True)
     @time_machine.travel("2024-01-15 12:00:00+00:00", tick=False)
@@ -870,11 +838,10 @@ class TestDjangoCeleryResultsMonitor:
         )
 
         monitor = DjangoCeleryResultsMonitor()
-        date_from = (now - timedelta(days=2)).isoformat()
-        date_to = now.isoformat()
+        date_from = now - timedelta(days=2)
+        date_to = now
 
         result = monitor.get_task_execution_stats(
-            hours=None,
             date_from=date_from,
             date_to=date_to,
             sort_by="min_runtime",

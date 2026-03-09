@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from django.db import models
@@ -57,19 +58,27 @@ class QueueTaskTypeStats:
 
 
 @dataclass
-class RecentTask:
+class TaskOverview:
     task_id: str
     task_name: str | None
     status: str
     worker: str | None
-    date_started: str | None
-    date_done: str | None
+    date_started: datetime | None
+    date_done: datetime | None
     execution_time: float | None
 
 
 @dataclass
 class RecentTasksData:
-    recent_tasks: list[RecentTask]
+    recent_tasks: list[TaskOverview]
+    task_names: list[str]
+    workers: list[str]
+
+
+@dataclass
+class TasksPage:
+    tasks: list[TaskOverview]
+    total: int
     task_names: list[str]
     workers: list[str]
 

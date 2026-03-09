@@ -10,16 +10,16 @@
             <select name="status" id="status">
                 <option value="">All</option>
                 <option value="SUCCESS"
-                        {% if current_status == "SUCCESS" %}selected{% endif %}>SUCCESS</option>
+                        {% if filters.status == "SUCCESS" %}selected{% endif %}>SUCCESS</option>
                 <option value="FAILURE"
-                        {% if current_status == "FAILURE" %}selected{% endif %}>FAILURE</option>
+                        {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
                 <option value="STARTED"
-                        {% if current_status == "STARTED" %}selected{% endif %}>STARTED</option>
+                        {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
                 <option value="PENDING"
-                        {% if current_status == "PENDING" %}selected{% endif %}>PENDING</option>
-                <option value="RETRY" {% if current_status == "RETRY" %}selected{% endif %}>RETRY</option>
+                        {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
+                <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
                 <option value="REVOKED"
-                        {% if current_status == "REVOKED" %}selected{% endif %}>REVOKED</option>
+                        {% if filters.status == "REVOKED" %}selected{% endif %}>REVOKED</option>
             </select>
         </div>
         <div class="filter-group">
@@ -28,7 +28,7 @@
                 <option value="">All</option>
                 {% for name in task_names %}
                     <option value="{{ name }}"
-                            {% if current_task_name == name %}selected{% endif %}>{{ name }}</option>
+                            {% if filters.task_name == name %}selected{% endif %}>{{ name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -37,13 +37,13 @@
             <select name="worker" id="worker">
                 <option value="">All</option>
                 {% for w in workers %}
-                    <option value="{{ w }}" {% if current_worker == w %}selected{% endif %}>{{ w }}</option>
+                    <option value="{{ w }}" {% if filters.worker == w %}selected{% endif %}>{{ w }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="filter-group">
             <button type="button"
-                    hx-get="{% url 'admin:celery_monitor_recent_tasks' %}?status={{ current_status }}&task_name={{ current_task_name }}&worker={{ current_worker }}"
+                    hx-get="{% url 'admin:celery_monitor_recent_tasks' %}?status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}"
                     hx-target="#recent-tasks-container"
                     hx-swap="innerHTML"
                     style="cursor: pointer">↻ Refresh</button>
