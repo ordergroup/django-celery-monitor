@@ -33,6 +33,7 @@ dev = [
   "factory-boy>=3.3.3",
   "fakeredis>=2.33",
   "pytest>=9.0.2",
+  "pytest-cov>=7.0",
   "pytest-django>=4.11.1",
   "ruff>=0.15",
   "time-machine>=3.2",
@@ -90,6 +91,16 @@ lint.isort.section-order = [
   "third-party",
   "first-party",
   "local-folder",
+]
+
+[tool.coverage.run]
+source = ["celery_monitor"]
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
 ]
 
 [tool.pytest.ini_options]
