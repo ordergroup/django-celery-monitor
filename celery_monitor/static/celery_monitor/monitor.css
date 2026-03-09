@@ -295,13 +295,17 @@
   color: var(--body-fg, #333);
 }
 .filters input[type="number"],
-.filters input[type="text"] {
+.filters input[type="text"],
+.filters input[type="datetime-local"] {
   padding: 6px 10px;
   border: 1px solid var(--border-color, #ccc);
   border-radius: 4px;
   background: var(--body-bg, #fff);
   color: var(--body-fg, #333);
   width: 80px;
+}
+.filters input[type="datetime-local"] {
+  width: auto;
 }
 .filters button {
   padding: 6px 12px;
@@ -344,6 +348,53 @@
 .dark .filters,
 [data-theme="dark"] .filters {
   background: rgb(39 39 42);
+  color: rgb(228 228 231);
+}
+
+.dark .filters label,
+[data-theme="dark"] .filters label {
+  color: rgb(228 228 231);
+}
+
+.dark .filters select,
+.dark .filters input,
+[data-theme="dark"] .filters select,
+[data-theme="dark"] .filters input {
+  background: rgb(24 24 27);
+  color: rgb(228 228 231);
+  border-color: rgb(63 63 70);
+}
+
+.dark .filters button,
+[data-theme="dark"] .filters button {
+  background: rgb(24 24 27);
+  color: rgb(228 228 231);
+  border-color: rgb(63 63 70);
+}
+
+.dark .filters button:hover,
+[data-theme="dark"] .filters button:hover {
+  background: rgb(39 39 42);
+}
+
+@media (prefers-color-scheme: dark) {
+  .filters {
+    background: rgb(39 39 42);
+    color: rgb(228 228 231);
+  }
+  .filters label { color: rgb(228 228 231); }
+  .filters select,
+  .filters input {
+    background: rgb(24 24 27);
+    color: rgb(228 228 231);
+    border-color: rgb(63 63 70);
+  }
+  .filters button {
+    background: rgb(24 24 27);
+    color: rgb(228 228 231);
+    border-color: rgb(63 63 70);
+  }
+  .filters button:hover { background: rgb(39 39 42); }
 }
 
 /* ── Task table ───────────────────────────────────────────── */
@@ -805,6 +856,16 @@ pre.code-block {
 .dark .info-box,
 [data-theme="dark"] .info-box {
   background: rgb(39 39 42);
+  color: rgb(228 228 231);
+  border-left-color: #4f86a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .info-box {
+    background: rgb(39 39 42);
+    color: rgb(228 228 231);
+    border-left-color: #4f86a0;
+  }
 }
 
 .table-meta {

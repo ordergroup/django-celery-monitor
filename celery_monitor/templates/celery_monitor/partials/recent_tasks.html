@@ -77,7 +77,7 @@
                     <td>{{ task.date_done }}</td>
                     <td>{{ task.execution_time|format_duration }}</td>
                     <td class="task-actions">
-                        {% if task.status == "STARTED" %}
+                        {% if task.status == "STARTED" or task.status == "PROGRESS" %}
                             <button class="kill-btn kill-btn--term"
                                     hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
                                     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'

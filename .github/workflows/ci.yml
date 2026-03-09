@@ -60,3 +60,6 @@ jobs:
 
       - name: Run ruff format check
         run: uv run ruff format --check celery_monitor tests
+
+      - name: Run djlint format check
+        run: uv run djlint --check celery_monitor/templates
