@@ -6,6 +6,7 @@ from celery import current_app
 from celery_monitor.models import (
     DashboardStatusCount,
     RecentTasksData,
+    ReservedTask,
     TaskDetail,
     TaskExecutionStats,
     TasksPage,
@@ -147,3 +148,23 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         page_size: int = 50,
     ) -> TasksPage:
         return TasksPage(tasks=[], total=0, task_names=[], workers=[])
+
+    def get_reserved_tasks(self) -> list[ReservedTask]:
+        try:
+            inspect = current_app.control.inspect(timeout=1.0)
+            reserved = inspect.reserved() or {}
+        except Exception:
+            reserved = {}
+
+        return [
+            ReservedTask(
+                id=t.get("id", ""),
+                name=t.get("name"),
+                worker=worker_name,
+                hostname=t.get("hostname"),
+                args=t.get("args"),
+                kwargs=t.get("kwargs"),
+            )
+            for worker_name, tasks in sorted(reserved.items())
+            for t in tasks
+        ]

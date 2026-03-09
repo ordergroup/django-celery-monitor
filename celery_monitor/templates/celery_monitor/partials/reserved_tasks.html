@@ -1,3 +1,7 @@
+<div class="info-box">
+    Reserved tasks have been prefetched from the broker but have not started executing yet.
+    Revoking a reserved task prevents it from running, it will be discarded by the worker when it picks it up.
+</div>
 {% if reserved_tasks %}
     <table class="task-table">
         <thead>
@@ -27,7 +31,9 @@
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                 hx-confirm="Revoke reserved task {{ task.id }}?"
                                 hx-swap="none"
-                                hx-on::after-request="if(event.detail.successful){ markTaskRevoked(this, '{{ task.id }}'); }">Revoke</button>
+                                hx-on::after-request="if(event.detail.successful){ markTaskRevoked(this, '{{ task.id }}'); }">
+                            Revoke
+                        </button>
                     </td>
                 </tr>
             {% endfor %}

@@ -35,6 +35,16 @@ class WorkerStats:
 
 
 @dataclass
+class ReservedTask:
+    id: str
+    name: str | None
+    worker: str
+    hostname: str | None
+    args: Any | None
+    kwargs: Any | None
+
+
+@dataclass
 class DashboardStatusCount:
     status: str
     count: int | None

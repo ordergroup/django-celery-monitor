@@ -14,6 +14,7 @@ from celery_monitor.filters import (
 )
 from celery_monitor.queue_monitor import get_queue_monitor
 from celery_monitor.results_monitor import get_results_monitor
+from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import is_redis_backend
 
 
@@ -75,18 +76,8 @@ def worker_stats_view(request: HttpRequest):
 
 
 def reserved_tasks_view(request: HttpRequest):
-    try:
-        inspect = current_app.control.inspect(timeout=1.0)
-        reserved = inspect.reserved() or {}
-    except Exception:
-        reserved = {}
-
-    # Flatten into a list of (worker, task) pairs sorted by worker name
-    reserved_tasks = [
-        {"worker": worker, **task}
-        for worker, tasks in sorted(reserved.items())
-        for task in tasks
-    ]
+    workers_monitor = WorkersCeleryResultsMonitor()
+    reserved_tasks = workers_monitor.get_reserved_tasks()
     context = {"reserved_tasks": reserved_tasks}
     return TemplateResponse(
         request,
