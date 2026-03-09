@@ -752,3 +752,91 @@ class TestDjangoCeleryResultsMonitor:
         assert len(result) == 2
         assert result[0].task_name == "tasks.fast"
         assert result[1].task_name == "tasks.slow"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_task_detail_found(self):
+        TaskResultFactory(
+            task_id="detail-task-1",
+            task_name="tasks.add",
+            status="SUCCESS",
+            worker="worker1@host",
+        )
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_task_detail("detail-task-1")
+
+        assert result is not None
+        assert result.task_id == "detail-task-1"
+        assert result.task_name == "tasks.add"
+        assert result.status == "SUCCESS"
+        assert result.worker == "worker1@host"
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_task_detail_not_found_falls_back_to_workers_monitor(self):
+        monitor = DjangoCeleryResultsMonitor()
+        with patch.object(
+            monitor.workers_monitor, "get_task_detail", return_value=None
+        ):
+            result = monitor.get_task_detail("nonexistent-id")
+        assert result is None
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_returns_paginated_results(self):
+        TaskResultFactory.create_batch(10, status="SUCCESS")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(page=0, page_size=5)
+
+        assert result.total == 10
+        assert len(result.tasks) == 5
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_second_page(self):
+        TaskResultFactory.create_batch(10, status="SUCCESS")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(page=1, page_size=5)
+
+        assert result.total == 10
+        assert len(result.tasks) == 5
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_status(self):
+        TaskResultFactory.create_batch(3, status="SUCCESS")
+        TaskResultFactory.create_batch(2, status="FAILURE")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(status="SUCCESS")
+
+        assert result.total == 3
+        assert all(t.status == "SUCCESS" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_task_name(self):
+        TaskResultFactory.create_batch(3, task_name="tasks.add")
+        TaskResultFactory.create_batch(2, task_name="tasks.process")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(task_name="tasks.add")
+
+        assert result.total == 3
+        assert all(t.task_name == "tasks.add" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_filter_by_worker(self):
+        TaskResultFactory.create_batch(4, worker="worker1@host")
+        TaskResultFactory.create_batch(2, worker="worker2@host")
+
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks(worker="worker1@host")
+
+        assert result.total == 4
+        assert all(t.worker == "worker1@host" for t in result.tasks)
+
+    @pytest.mark.django_db(transaction=True)
+    def test_get_tasks_empty(self):
+        monitor = DjangoCeleryResultsMonitor()
+        result = monitor.get_tasks()
+
+        assert result.total == 0
+        assert result.tasks == []

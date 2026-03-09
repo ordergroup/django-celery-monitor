@@ -185,3 +185,67 @@ class TestCeleryResultsMonitor:
         result = monitor.get_reserved_tasks()
 
         assert result == []
+
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    def test_get_task_detail_found_in_reserved(self, mock_app):
+        mock_inspect = Mock()
+        mock_inspect.reserved.return_value = {
+            "worker1@host": [
+                {
+                    "id": "task-abc",
+                    "name": "tasks.add",
+                    "hostname": "worker1@host",
+                    "args": [1, 2],
+                    "kwargs": {},
+                }
+            ]
+        }
+        mock_app.control.inspect.return_value = mock_inspect
+
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_task_detail("task-abc")
+
+        assert result is not None
+        assert result.task_id == "task-abc"
+        assert result.task_name == "tasks.add"
+        assert result.status == "RESERVED"
+        assert result.worker == "worker1@host"
+
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    def test_get_task_detail_not_found_returns_none(self, mock_app):
+        mock_inspect = Mock()
+        mock_inspect.reserved.return_value = {}
+        mock_app.control.inspect.return_value = mock_inspect
+
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_task_detail("nonexistent")
+
+        assert result is None
+
+    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    def test_get_task_detail_exception_returns_none(self, mock_app):
+        mock_app.control.inspect.side_effect = Exception("Connection error")
+
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_task_detail("some-id")
+
+        assert result is None
+
+    def test_get_tasks_returns_empty_page(self):
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_tasks()
+
+        assert result.tasks == []
+        assert result.total == 0
+
+    def test_get_tasks_names_returns_empty(self):
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_tasks_names()
+
+        assert result == []
+
+    def test_get_workers_names_returns_empty(self):
+        monitor = WorkersCeleryResultsMonitor()
+        result = monitor.get_workers_names()
+
+        assert result == []
