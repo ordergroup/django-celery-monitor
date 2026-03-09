@@ -84,6 +84,13 @@ function applyRevokedStates() {
         </div>
     </div>
     <div>
+        <h2 class="section-title">Redis Queue Stats</h2>
+        <div id="queue-stats"
+             hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}"
+             hx-trigger="load, every 5s, refresh"
+             hx-swap="innerHTML"></div>
+    </div>
+    <div>
         <h2 class="section-title"
             style="cursor: pointer;
                    user-select: none"
@@ -98,13 +105,6 @@ function applyRevokedStates() {
              hx-on::after-swap="applyRevokedStates()">
             <p class="loading-indicator">Loading</p>
         </div>
-    </div>
-    <div>
-        <h2 class="section-title">Redis Queue Stats</h2>
-        <div id="queue-stats"
-             hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}"
-             hx-trigger="load, every 5s, refresh"
-             hx-swap="innerHTML"></div>
     </div>
     <div>
         <h2 class="section-title"
