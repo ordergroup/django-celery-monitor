@@ -80,18 +80,9 @@ class TaskOverview:
 
 
 @dataclass
-class RecentTasksData:
-    recent_tasks: list[TaskOverview]
-    task_names: list[str]
-    workers: list[str]
-
-
-@dataclass
 class TasksPage:
     tasks: list[TaskOverview]
     total: int
-    task_names: list[str]
-    workers: list[str]
 
 
 @dataclass

@@ -5,10 +5,10 @@ from celery import current_app
 
 from celery_monitor.models import (
     DashboardStatusCount,
-    RecentTasksData,
     ReservedTask,
     TaskDetail,
     TaskExecutionStats,
+    TaskOverview,
     TasksPage,
     WorkerStats,
 )
@@ -106,8 +106,8 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         task_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
-    ) -> RecentTasksData:
-        return RecentTasksData(recent_tasks=[], task_names=[], workers=[])
+    ) -> list[TaskOverview]:
+        return []
 
     def get_task_detail(self, task_id: str) -> TaskDetail | None:
         try:
@@ -168,3 +168,9 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
             for worker_name, tasks in sorted(reserved.items())
             for t in tasks
         ]
+
+    def get_tasks_names(self) -> list[str]:
+        return []
+
+    def get_workers_names(self) -> list[str]:
+        return []

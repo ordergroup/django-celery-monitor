@@ -4,9 +4,9 @@ from datetime import datetime
 
 from celery_monitor.models import (
     DashboardStatusCount,
-    RecentTasksData,
     TaskDetail,
     TaskExecutionStats,
+    TaskOverview,
     TasksPage,
     WorkerStats,
 )
@@ -40,7 +40,7 @@ class CeleryResultsMonitor(ABC):
         task_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
-    ) -> RecentTasksData: ...
+    ) -> list[TaskOverview]: ...
 
     @abstractmethod
     def get_task_detail(self, task_id: str) -> TaskDetail | None: ...
@@ -56,3 +56,9 @@ class CeleryResultsMonitor(ABC):
         page: int = 0,
         page_size: int = 50,
     ) -> TasksPage: ...
+
+    @abstractmethod
+    def get_tasks_names(self) -> list[str]: ...
+
+    @abstractmethod
+    def get_workers_names(self) -> list[str]: ...

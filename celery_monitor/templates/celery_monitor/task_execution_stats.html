@@ -15,27 +15,27 @@
         <div class="filter-group">
             <label>Time Range:</label>
             <button type="button"
-                    {% if filters.hours_param == '1' %}class="active"{% endif %}
+                    {% if hours_param == '1' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=1; document.getElementById('time-range-form').submit();">
                 1h
             </button>
             <button type="button"
-                    {% if filters.hours_param == '24' %}class="active"{% endif %}
+                    {% if hours_param == '24' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=24; document.getElementById('time-range-form').submit();">
                 24h
             </button>
             <button type="button"
-                    {% if filters.hours_param == '168' %}class="active"{% endif %}
+                    {% if hours_param == '168' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=168; document.getElementById('time-range-form').submit();">
                 7d
             </button>
             <button type="button"
-                    {% if filters.hours_param == '720' %}class="active"{% endif %}
+                    {% if hours_param == '720' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value=720; document.getElementById('time-range-form').submit();">
                 30d
             </button>
             <button type="button"
-                    {% if filters.hours_param == 'all' %}class="active"{% endif %}
+                    {% if hours_param == 'all' %}class="active"{% endif %}
                     onclick="clearCustomDates(); document.getElementById('hours').value='all'; document.getElementById('time-range-form').submit();">
                 All
             </button>
