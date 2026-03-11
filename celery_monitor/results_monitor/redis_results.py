@@ -57,7 +57,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         self.workers_monitor = WorkersCeleryResultsMonitor()
 
     def _init_client(self) -> redis.Redis:
-        redis_url = current_app.conf.broker_url or current_app.conf.result_backend
+        redis_url = current_app.conf.result_backend or current_app.conf.broker_url
         if not redis_url:
             raise ValueError(
                 "Cannot initialize Redis client. Celery broker_url or result_backend must be set and use Redis"
