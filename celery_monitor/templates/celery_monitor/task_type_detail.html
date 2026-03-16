@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load celery_monitor_tags %}
+{% block extrabody %}<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>{% endblock %}
+{% block title %}{{ task_name }}{% endblock %}
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+    <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+    <script src="{% static 'celery_monitor/detail_selector.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="{% static 'celery_monitor/detail_charts.js' %}"></script>
+{% endblock %}
+{% block content %}
+    {% include "celery_monitor/partials/detail_selector.html" with select_id="task-type-select" label="Task Type:" param_name="task_name" item_names=task_names current_value=task_name placeholder="-- select a task type --" %}
+    {% if not task_name %}
+    <p style="color: var(--body-quiet-color, #666); margin-top: 24px;">Select a task type above to view its details.</p>
+    {% else %}
+    {% with selector_param="task_name" selector_value=task_name %}
+        {% include "celery_monitor/partials/detail_time_range.html" %}
+        {% include "celery_monitor/partials/detail_charts.html" %}
+        {% include "celery_monitor/partials/detail_tasks_section.html" %}
+    {% endwith %}
+    {% endif %}{# end if task_name #}
+{% endblock %}

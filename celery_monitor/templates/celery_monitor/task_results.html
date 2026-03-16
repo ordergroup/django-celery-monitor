@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
     <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
 {% endblock %}
 {% block content %}
     {% if is_redis %}
@@ -107,20 +108,7 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
 });
         </script>
     {% endif %}
-    <script>
-var fpFrom = flatpickr('#date_from', {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: 'Y-m-d\\TH:i',
-    allowInput: true,
-});
-var fpTo = flatpickr('#date_to', {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: 'Y-m-d\\TH:i',
-    allowInput: true,
-});
-    </script>
+    <script>initFlatpickrDateRange();</script>
     <div class="table-meta">
         <span>{{ total }} task{{ total|pluralize }} total</span>
         {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}

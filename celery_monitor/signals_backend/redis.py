@@ -19,7 +19,7 @@ from celery_monitor.redis_keys import (
 )
 from celery_monitor.signals_backend.base import SignalsResultBackend
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 class RedisSignalsResultBackend(SignalsResultBackend):
@@ -29,7 +29,7 @@ class RedisSignalsResultBackend(SignalsResultBackend):
             settings, "DJANGO_CELERY_MONITOR_TASK_DATA_TTL", 7 * 24 * 60 * 60
         )
         self.queue_history_maxlen = getattr(
-            settings, "DJANGO_CELERY_MONITOR_QUEUE_HISTORY_MAXLEN", 10000
+            settings, "DJANGO_CELERY_MONITOR_QUEUE_HISTORY_MAXLEN", 50000
         )
         self.redis_client = self._get_redis_client()
         self.broker_redis_client = self._get_broker_redis_client()
@@ -256,8 +256,9 @@ class RedisSignalsResultBackend(SignalsResultBackend):
     ):
         if not queue_name:
             return
+
         lock_key = REDIS_KEY_QUEUE_LEN_SAMPLE_LOCK.format(queue_name=queue_name)
-        acquired = self.redis_client.set(lock_key, 1, nx=True, ex=60)
+        acquired = self.redis_client.set(lock_key, 1, nx=True, ex=10)
         if not acquired:
             return
 
@@ -265,6 +266,9 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         if self.broker_redis_client:
             with contextlib.suppress(Exception):
                 queue_len = self.broker_redis_client.llen(queue_name)
+
+        if queue_len is None:
+            return
 
         stream_key = REDIS_KEY_QUEUE_LEN_STREAM.format(queue_name=queue_name)
         pipeline.xadd(

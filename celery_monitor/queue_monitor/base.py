@@ -27,3 +27,17 @@ class QueueMonitor:
 
     def clear_queue(self, queue_name: str) -> None:
         return None
+
+    def queue_length_history(self) -> dict:
+        """
+        Get queue length historical data
+
+        returns: dict in format
+        ```
+        {
+          "queue_name": ["x": 1773581597404, "y": 21],
+        }
+        ```
+        where x is a timestamp and y is a count
+        """
+        return {}

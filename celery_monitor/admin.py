@@ -67,6 +67,16 @@ def patch_admin_site(site):
                 name="celery_monitor_task_results",
             ),
             path(
+                "celery-monitor/task-type/",
+                site.admin_view(lambda req: views.task_type_detail_view(req, site)),
+                name="celery_monitor_task_type_detail",
+            ),
+            path(
+                "celery-monitor/queue-detail/",
+                site.admin_view(lambda req: views.queue_detail_view(req, site)),
+                name="celery_monitor_queue_detail",
+            ),
+            path(
                 "celery-monitor/task/<str:task_id>/",
                 site.admin_view(
                     lambda req, task_id: views.task_detail_view(req, site, task_id)
@@ -119,6 +129,8 @@ def patch_admin_site(site):
                 f"{site.name}:celery_monitor_task_execution_stats"
             )
             task_results_url = reverse(f"{site.name}:celery_monitor_task_results")
+            task_type_url = reverse(f"{site.name}:celery_monitor_task_type_detail")
+            queue_detail_url = reverse(f"{site.name}:celery_monitor_queue_detail")
 
             models = [
                 {
@@ -137,6 +149,18 @@ def patch_admin_site(site):
                     "name": "Task Execution Stats",
                     "object_name": "CeleryMonitorTaskExecutionStats",
                     "admin_url": execution_stats_url,
+                    "view_only": True,
+                },
+                {
+                    "name": "Task Type Detail",
+                    "object_name": "CeleryMonitorTaskTypeDetail",
+                    "admin_url": task_type_url,
+                    "view_only": True,
+                },
+                {
+                    "name": "Queue Detail",
+                    "object_name": "CeleryMonitorQueueDetail",
+                    "admin_url": queue_detail_url,
                     "view_only": True,
                 },
             ]

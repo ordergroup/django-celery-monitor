@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
     <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
 {% endblock %}
 {% block content %}
     <form class="filters" method="get" id="time-range-form">
@@ -58,29 +59,7 @@
             <button type="submit" onclick="clearHoursParam();">Apply</button>
         </div>
     </form>
-    <script>
-var fpFrom = flatpickr('#date_from', {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: 'Y-m-d\\TH:i',
-    allowInput: true,
-});
-var fpTo = flatpickr('#date_to', {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: 'Y-m-d\\TH:i',
-    allowInput: true,
-});
-
-function clearCustomDates() {
-    fpFrom.clear();
-    fpTo.clear();
-}
-
-function clearHoursParam() {
-    document.getElementById('hours').value = '';
-}
-    </script>
+    <script>initFlatpickrDateRange();</script>
     {% if execution_stats %}
         <table class="task-execution-table">
             <thead>
@@ -201,7 +180,9 @@ function clearHoursParam() {
             <tbody>
                 {% for stat in execution_stats %}
                     <tr>
-                        <td class="task-name">{{ stat.task_name }}</td>
+                        <td class="task-name">
+                            <a href="{% url 'admin:celery_monitor_task_type_detail' %}?task_name={{ stat.task_name }}&hours={{ filters.hours_param }}">{{ stat.task_name }}</a>
+                        </td>
                         <td class="stat-count">{{ stat.total_count }}</td>
                         <td class="stat-count success">{{ stat.success_count }}</td>
                         <td class="stat-count failure">{{ stat.failure_count }}</td>

@@ -62,6 +62,8 @@ class TaskExecutionStats:
     avg_wait: float | None = None
     min_wait: float | None = None
     max_wait: float | None = None
+    queued_count: int = 0
+    started_count: int = 0
 
 
 @dataclass
@@ -81,6 +83,20 @@ class TaskOverview:
     date_done: datetime | None
     execution_time: float | None
     queue_name: str | None
+
+
+@dataclass
+class TaskTypeTimeSeries:
+    bucket: datetime
+    count: int
+    avg_runtime: float | None
+    min_runtime: float | None
+    max_runtime: float | None
+    avg_wait: float | None
+    min_wait: float | None
+    max_wait: float | None
+    success_count: int = 0
+    failure_count: int = 0
 
 
 @dataclass

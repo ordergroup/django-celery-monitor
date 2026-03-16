@@ -4,7 +4,7 @@ from functools import wraps
 
 from celery import Celery
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 def safe_signal_handler(func):

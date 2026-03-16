@@ -2,7 +2,7 @@ import logging
 
 from celery_monitor.signals_backend.base import SignalsResultBackend
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 class NoopSignalsResultBackend(SignalsResultBackend):

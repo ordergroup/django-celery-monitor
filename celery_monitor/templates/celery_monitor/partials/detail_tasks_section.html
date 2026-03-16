@@ -1,0 +1,109 @@
+{% load celery_monitor_tags %}
+<p class="section-title" style="margin-top:32px">Tasks</p>
+{% if not is_redis %}
+    <form class="filters filters--rows" method="get" id="task-filters-form">
+        <input type="hidden" name="{{ selector_param }}" value="{{ selector_value }}">
+        <input type="hidden" name="hours" value="{{ filters.hours_param }}">
+        {% if filters.date_from %}<input type="hidden" name="date_from" value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">{% endif %}
+        {% if filters.date_to %}<input type="hidden" name="date_to" value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">{% endif %}
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="status">Status:</label>
+                <select name="status" id="status">
+                    <option value="">All</option>
+                    <option value="SUCCESS"  {% if filters.status == "SUCCESS"  %}selected{% endif %}>SUCCESS</option>
+                    <option value="FAILURE"  {% if filters.status == "FAILURE"  %}selected{% endif %}>FAILURE</option>
+                    <option value="STARTED"  {% if filters.status == "STARTED"  %}selected{% endif %}>STARTED</option>
+                    <option value="QUEUED"   {% if filters.status == "QUEUED"   %}selected{% endif %}>QUEUED</option>
+                    <option value="PENDING"  {% if filters.status == "PENDING"  %}selected{% endif %}>PENDING</option>
+                    <option value="RETRY"    {% if filters.status == "RETRY"    %}selected{% endif %}>RETRY</option>
+                    <option value="REVOKED"  {% if filters.status == "REVOKED"  %}selected{% endif %}>REVOKED</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="worker">Worker:</label>
+                <select name="worker" id="worker">
+                    <option value="">All</option>
+                    {% for w in workers %}
+                        <option value="{{ w }}" {% if filters.worker == w %}selected{% endif %}>{{ w }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <button type="submit">Apply</button>
+                <a href="?{{ selector_param }}={{ selector_value }}">Clear</a>
+            </div>
+        </div>
+    </form>
+    <script>
+document.getElementById('task-filters-form').addEventListener('change', function(e) {
+    if (e.target.tagName === 'SELECT') this.submit();
+});
+    </script>
+{% endif %}
+<div class="table-meta">
+    <span>{{ total }} task{{ total|pluralize }} total</span>
+    {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}
+</div>
+<table class="task-table">
+    <thead>
+        <tr>
+            <th>Task ID</th>
+            <th>Status</th>
+            <th>Queue</th>
+            <th>Worker</th>
+            <th>Started</th>
+            <th>Completed</th>
+            <th>Execution Time</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for task in tasks %}
+            <tr>
+                <td class="task-id-cell">
+                    <a href="{% url 'admin:celery_monitor_task_detail' task.task_id %}">{{ task.task_id|truncatechars:20 }}</a>
+                </td>
+                <td><span class="status-badge {{ task.status }}">{{ task.status }}</span></td>
+                <td>{{ task.queue_name|default:"-" }}</td>
+                <td>{{ task.worker|default:"-" }}</td>
+                <td>{{ task.date_started|default:"-" }}</td>
+                <td>{{ task.date_done|default:"-" }}</td>
+                <td>{{ task.execution_time|format_duration }}</td>
+                <td class="task-actions">
+                    {% if task.status == "STARTED" or task.status == "PROGRESS" %}
+                        <button class="kill-btn kill-btn--term"
+                                hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-confirm="Send SIGTERM to task {{ task.task_id }}?"
+                                hx-swap="none">SIGTERM</button>
+                        <button class="kill-btn kill-btn--kill"
+                                hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}?sigkill"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-confirm="Send SIGKILL to task {{ task.task_id }}?"
+                                hx-swap="none">SIGKILL</button>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="8" class="empty-row">No tasks found.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if total_pages > 1 %}
+    <div class="pagination">
+        {% if filters.page > 0 %}
+            <a href="?{{ selector_param }}={{ selector_value }}&page=0&status={{ filters.status|default:"" }}&worker={{ filters.worker|default:"" }}&hours={{ filters.hours_param }}">&laquo; First</a>
+            <a href="?{{ selector_param }}={{ selector_value }}&page={{ filters.page|add:"-1" }}&status={{ filters.status|default:"" }}&worker={{ filters.worker|default:"" }}&hours={{ filters.hours_param }}">&lsaquo; Prev</a>
+        {% endif %}
+        <span class="pagination-current">{{ filters.page|add:1 }} / {{ total_pages }}</span>
+        {% if filters.page|add:1 < total_pages %}
+            <a href="?{{ selector_param }}={{ selector_value }}&page={{ filters.page|add:"1" }}&status={{ filters.status|default:"" }}&worker={{ filters.worker|default:"" }}&hours={{ filters.hours_param }}">Next &rsaquo;</a>
+            {% with last_page=total_pages|add:"-1" %}
+                <a href="?{{ selector_param }}={{ selector_value }}&page={{ last_page }}&status={{ filters.status|default:"" }}&worker={{ filters.worker|default:"" }}&hours={{ filters.hours_param }}">Last &raquo;</a>
+            {% endwith %}
+        {% endif %}
+    </div>
+{% endif %}

@@ -10,11 +10,12 @@ from celery_monitor.models import (
     TaskExecutionStats,
     TaskOverview,
     TasksPage,
+    TaskTypeTimeSeries,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
@@ -144,6 +145,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
@@ -171,6 +173,38 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
             for worker_name, tasks in sorted(reserved.items())
             for t in tasks
         ]
+
+    def get_task_type_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        return []
+
+    def get_throughput_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        return [], []
+
+    def get_queue_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        return []
+
+    def get_queue_throughput_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        return [], []
 
     def get_tasks_names(self) -> list[str]:
         return []
