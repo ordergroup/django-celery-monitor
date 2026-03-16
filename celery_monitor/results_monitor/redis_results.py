@@ -180,6 +180,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]:
@@ -199,11 +200,14 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         for task_data in pipeline.execute():
             task_status = task_data.get("status")
             task_name_value = task_data.get("task_name")
+            queue_name_value = task_data.get("queue_name")
             task_worker = task_data.get("worker")
 
             if status and task_status != status:
                 continue
             if task_name and task_name_value != task_name:
+                continue
+            if queue_name and queue_name_value != queue_name:
                 continue
             if worker and task_worker != worker:
                 continue

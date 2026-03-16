@@ -1,8 +1,9 @@
 import math
+import time
 
 from celery import current_app
 from django.contrib.admin import AdminSite
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse
 from django.template.response import TemplateResponse
 from django.views.decorators.http import require_POST
 
@@ -13,6 +14,7 @@ from celery_monitor.filters import (
     WorkerStatsFilters,
 )
 from celery_monitor.queue_monitor import get_queue_monitor
+from celery_monitor.redis_keys import REDIS_KEY_QUEUE_LEN_STREAM
 from celery_monitor.results_monitor import get_results_monitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import is_redis_backend
@@ -61,6 +63,41 @@ def redis_queue_task_types_view(request: HttpRequest):
     )
 
 
+def redis_queue_history_view(request: HttpRequest):
+    queue_monitor = get_queue_monitor()
+    queue_names = queue_monitor.get_queue_names()
+
+    now_ms = int(time.time() * 1000)
+    start_ms = now_ms - 24 * 3600 * 1000
+
+    try:
+        import redis as redis_lib
+
+        redis_url = current_app.conf.result_backend or current_app.conf.broker_url
+        r = redis_lib.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=3
+        )
+
+        pipeline = r.pipeline()
+        for queue_name in queue_names:
+            stream_key = REDIS_KEY_QUEUE_LEN_STREAM.format(queue_name=queue_name)
+            pipeline.xrange(stream_key, min=start_ms, max=now_ms)
+        all_entries = pipeline.execute()
+
+        queues = {
+            queue_name: [
+                {"x": int(entry_id.split("-")[0]), "y": int(fields["queue_len"])}
+                for entry_id, fields in entries
+            ]
+            for queue_name, entries in zip(queue_names, all_entries)
+        }
+
+    except Exception:
+        queues = {q: [] for q in queue_names}
+
+    return JsonResponse({"queues": queues})
+
+
 def worker_stats_view(request: HttpRequest):
     filters = WorkerStatsFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -89,19 +126,23 @@ def reserved_tasks_view(request: HttpRequest):
 def recent_tasks_view(request: HttpRequest):
     filters = RecentTasksFilters.from_request(request)
     results_monitor = get_results_monitor()
+    queue_monitor = get_queue_monitor()
     data = results_monitor.get_recent_tasks(
         status=filters.status,
         task_name=filters.task_name,
+        queue_name=filters.queue_name,
         worker=filters.worker,
         limit=filters.limit,
     )
     task_names = results_monitor.get_tasks_names()
+    queue_names = queue_monitor.get_queue_names()
     workers = results_monitor.get_workers_names()
 
     context = {
         "recent_tasks": data,
         "filters": filters,
         "task_names": task_names,
+        "queue_names": queue_names,
         "workers": workers,
     }
     return TemplateResponse(

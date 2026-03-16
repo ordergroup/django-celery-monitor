@@ -5,6 +5,8 @@
     {{ block.super }}
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
             crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+            crossorigin="anonymous"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
     <script>
   document.addEventListener("htmx:configRequest", (e) => {
@@ -89,6 +91,9 @@ function applyRevokedStates() {
              hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}"
              hx-trigger="load, every 5s, refresh"
              hx-swap="innerHTML"></div>
+    </div>
+    <div>
+        {% include "celery_monitor/partials/queue_len_history.html" %}
     </div>
     <div>
         <h2 class="section-title"

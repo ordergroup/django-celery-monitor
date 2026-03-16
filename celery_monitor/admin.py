@@ -37,6 +37,11 @@ def patch_admin_site(site):
                 name="celery_monitor_redis_queue_stats",
             ),
             path(
+                "celery-monitor/redis-queue-history",
+                site.admin_view(views.redis_queue_history_view),
+                name="celery_monitor_redis_queue_history",
+            ),
+            path(
                 "celery-monitor/worker-stats",
                 site.admin_view(views.worker_stats_view),
                 name="celery_monitor_worker_stats",

@@ -108,7 +108,14 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     date_to = timezone.make_aware(date_to)
                 queryset = queryset.filter(date_done__lte=date_to)
 
-            nullable_fields = {"avg_runtime", "min_runtime", "max_runtime", "avg_wait", "min_wait", "max_wait"}
+            nullable_fields = {
+                "avg_runtime",
+                "min_runtime",
+                "max_runtime",
+                "avg_wait",
+                "min_wait",
+                "max_wait",
+            }
             if sort_by in nullable_fields:
                 if sort_order == "desc":
                     order_expr = F(sort_by).desc(nulls_last=True)
@@ -223,6 +230,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]:
@@ -262,6 +270,10 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                         queue_name="unknown",  # TODO: we probably need a signals similar to redis to get the queue_name
                     )
                 )
+
+            if queue_name:
+                # TODO: find a way to filter by queue_name
+                pass
 
             return recent_tasks
 

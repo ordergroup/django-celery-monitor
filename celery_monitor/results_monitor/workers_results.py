@@ -104,6 +104,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]:
@@ -116,6 +117,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
             for worker_name, tasks in reserved.items():
                 for t in tasks:
                     if t.get("id") == task_id:
+                        delivery_info = t.get("delivery_info") or {}
                         return TaskDetail(
                             task_id=task_id,
                             task_name=t.get("name"),
@@ -132,6 +134,7 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
                             meta=None,
                             exception_type=None,
                             exception=None,
+                            queue_name=delivery_info.get("routing_key"),
                         )
         except Exception as e:
             logger.exception("Error looking up reserved task detail: %s", e)

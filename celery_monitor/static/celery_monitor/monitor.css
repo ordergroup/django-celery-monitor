@@ -697,6 +697,31 @@ pre.code-block {
   color: rgb(228 228 231);
 }
 
+/* ── Queue history chart ──────────────────────────────────── */
+
+.queue-history-chart-wrap {
+  position: relative;
+  height: 280px;
+  margin-bottom: 24px;
+  background: var(--body-bg, #fff);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.dark .queue-history-chart-wrap,
+[data-theme="dark"] .queue-history-chart-wrap {
+  background: rgb(39 39 42);
+  border-color: rgb(63 63 70);
+}
+
+@media (prefers-color-scheme: dark) {
+  .queue-history-chart-wrap {
+    background: rgb(39 39 42);
+    border-color: rgb(63 63 70);
+  }
+}
+
 /* ── Clear queue button ───────────────────────────────────── */
 
 .clear-queue-btn {
