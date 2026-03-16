@@ -307,8 +307,9 @@
   color: var(--body-fg, #333);
   width: 80px;
 }
-.filters input[type="datetime-local"] {
-  width: auto;
+.filters input[type="datetime-local"],
+.filters input.flatpickr-input {
+  width: 160px;
 }
 .filters button {
   padding: 6px 12px;

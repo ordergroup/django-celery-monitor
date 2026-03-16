@@ -6,6 +6,8 @@
 {% block extrastyle %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+    <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 {% endblock %}
 {% block content %}
     {% if is_redis %}
@@ -14,17 +16,19 @@
             <div class="filter-row">
                 <div class="filter-group">
                     <label>From:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_from"
                            id="date_from"
-                           value="{{ filters.date_from }}">
+                           placeholder="From"
+                           value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">
                 </div>
                 <div class="filter-group">
                     <label>To:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_to"
                            id="date_to"
-                           value="{{ filters.date_to }}">
+                           placeholder="To"
+                           value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
                 </div>
                 <div class="filter-group">
                     <button type="submit">Apply</button>
@@ -79,16 +83,18 @@
             <div class="filter-row">
                 <div class="filter-group">
                     <label>From:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_from"
                            id="date_from"
+                           placeholder="From"
                            value="{{ filters.date_from }}">
                 </div>
                 <div class="filter-group">
                     <label>To:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_to"
                            id="date_to"
+                           placeholder="To"
                            value="{{ filters.date_to }}">
                 </div>
             </div>
@@ -99,6 +105,20 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
 });
         </script>
     {% endif %}
+    <script>
+var fpFrom = flatpickr('#date_from', {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: 'Y-m-d\\TH:i',
+    allowInput: true,
+});
+var fpTo = flatpickr('#date_to', {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: 'Y-m-d\\TH:i',
+    allowInput: true,
+});
+    </script>
     <div class="table-meta">
         <span>{{ total }} task{{ total|pluralize }} total</span>
         {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}
