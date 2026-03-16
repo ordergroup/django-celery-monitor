@@ -1,0 +1,23 @@
+<div class="task-type-chart-wrap" style="margin: 24px 0 0;">
+    <p class="section-title">Tasks over time</p>
+    <div style="height: 200px; position: relative;">
+        <canvas id="countChart"></canvas>
+    </div>
+</div>
+<div class="task-type-chart-wrap" style="margin: 24px 0 0;">
+    <p class="section-title">Queued &amp; started over time</p>
+    <div style="height: 200px; position: relative;">
+        <canvas id="throughputChart"></canvas>
+    </div>
+</div>
+<div class="task-type-charts">
+    <div class="task-type-chart-wrap">
+        <p class="section-title">Runtime over time</p>
+        <canvas id="runtimeChart"></canvas>
+    </div>
+    <div class="task-type-chart-wrap">
+        <p class="section-title">Wait time over time</p>
+        <canvas id="waitChart"></canvas>
+    </div>
+</div>
+<script>renderDetailCharts({{ chart_data_json|safe }});</script>

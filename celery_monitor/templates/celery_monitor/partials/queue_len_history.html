@@ -1,0 +1,5 @@
+<h2 class="section-title">Queue Length History (last 24h)</h2>
+<div class="queue-history-chart-wrap">
+    <canvas id="queueHistoryChart"
+            data-url="{% url 'admin:celery_monitor_redis_queue_history' %}"></canvas>
+</div>

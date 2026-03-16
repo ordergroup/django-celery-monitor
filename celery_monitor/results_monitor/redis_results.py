@@ -14,6 +14,7 @@ from celery_monitor.models import (
     TaskExecutionStats,
     TaskOverview,
     TasksPage,
+    TaskTypeTimeSeries,
     WorkerStats,
 )
 from celery_monitor.redis_keys import (
@@ -26,7 +27,7 @@ from celery_monitor.redis_keys import (
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 REDIS_SCHEME = "redis://"
 REDIS_SECURE_SCHEME = "rediss://"
@@ -130,7 +131,10 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 "total": 0,
                 "success": 0,
                 "failure": 0,
+                "queued": 0,
+                "started": 0,
                 "runtimes": [],
+                "waittimes": [],
             }
         )
 
@@ -145,20 +149,33 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 stats_by_name[task_name]["success"] += 1
             elif status == "FAILURE":
                 stats_by_name[task_name]["failure"] += 1
+            elif status in ("QUEUED", "PENDING"):
+                stats_by_name[task_name]["queued"] += 1
+            elif status == "STARTED":
+                stats_by_name[task_name]["started"] += 1
             stats_by_name[task_name]["runtimes"].append(get_execution_time(task_data))
+            wait = get_wait_time(task_data)
+            if wait is not None:
+                stats_by_name[task_name]["waittimes"].append(wait)
 
         result = []
         for task_name, data in stats_by_name.items():
             runtimes = [r for r in data["runtimes"] if r]
+            waittimes = data["waittimes"]
             result.append(
                 TaskExecutionStats(
                     task_name=task_name,
                     total_count=data["total"],
                     success_count=data["success"],
                     failure_count=data["failure"],
+                    queued_count=data["queued"],
+                    started_count=data["started"],
                     avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
                     min_runtime=min(runtimes) if runtimes else None,
                     max_runtime=max(runtimes) if runtimes else None,
+                    avg_wait=sum(waittimes) / len(waittimes) if waittimes else None,
+                    min_wait=min(waittimes) if waittimes else None,
+                    max_wait=max(waittimes) if waittimes else None,
                 )
             )
 
@@ -172,6 +189,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]:
@@ -191,11 +209,14 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         for task_data in pipeline.execute():
             task_status = task_data.get("status")
             task_name_value = task_data.get("task_name")
+            queue_name_value = task_data.get("queue_name")
             task_worker = task_data.get("worker")
 
             if status and task_status != status:
                 continue
             if task_name and task_name_value != task_name:
+                continue
+            if queue_name and queue_name_value != queue_name:
                 continue
             if worker and task_worker != worker:
                 continue
@@ -209,6 +230,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                     date_started=get_timestamp(task_data, "date_started"),
                     date_done=get_timestamp(task_data, "date_done"),
                     execution_time=get_execution_time(task_data),
+                    queue_name=task_data.get("queue_name", "unknown"),
                 )
             )
 
@@ -231,6 +253,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
             task_name=task_data.get("task_name"),
             status=task_data.get("status"),
             worker=task_data.get("worker", "unknown"),
+            queue_name=task_data.get("queue_name", "unknown"),
             date_started=date_started.isoformat() if date_started else None,
             date_created=date_created.isoformat() if date_created else None,
             date_done=date_done.isoformat() if date_done else None,
@@ -248,36 +271,54 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         page: int = 0,
         page_size: int = 50,
     ) -> TasksPage:
-        start = page * page_size
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
+        all_task_ids = list(
+            reversed(
+                self.client.zrangebyscore(REDIS_KEY_RECENT_TASKS, start_time, end_time)
+            )
+        )
 
-        if date_from or date_to:
-            start_time = date_from.timestamp() if date_from else float("-inf")
-            end_time = date_to.timestamp() if date_to else float("inf")
-            all_task_ids = list(
-                reversed(
-                    self.client.zrangebyscore(
-                        REDIS_KEY_RECENT_TASKS,
-                        start_time,
-                        end_time,
-                    )
+        if queue_name or task_name or status or worker:
+            pipeline = self.client.pipeline()
+            for task_id in all_task_ids:
+                pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+            filtered = [
+                td
+                for td in pipeline.execute()
+                if (not task_name or td.get("task_name") == task_name)
+                and (not queue_name or td.get("queue_name") == queue_name)
+                and (not status or td.get("status") == status)
+                and (not worker or td.get("worker") == worker)
+            ]
+            total = len(filtered)
+            start = page * page_size
+            page_data = filtered[start : start + page_size]
+            tasks = [
+                TaskOverview(
+                    task_id=td.get("task_id"),
+                    task_name=td.get("task_name"),
+                    status=td.get("status"),
+                    worker=td.get("worker"),
+                    date_started=get_timestamp(td, "date_started"),
+                    date_done=get_timestamp(td, "date_done"),
+                    execution_time=get_execution_time(td),
+                    queue_name=td.get("queue_name", "unknown"),
                 )
-            )
-            total = len(all_task_ids)
-            task_ids = all_task_ids[start : start + page_size]
-        else:
-            total = self.client.zcard(REDIS_KEY_RECENT_TASKS)
-            task_ids = self.client.zrevrange(
-                REDIS_KEY_RECENT_TASKS,
-                start=start,
-                end=start + page_size - 1,
-            )
+                for td in page_data
+            ]
+            return TasksPage(tasks=tasks, total=total)
 
+        total = len(all_task_ids)
+        start = page * page_size
+        task_ids = all_task_ids[start : start + page_size]
         return TasksPage(tasks=self._get_tasks_overviews(task_ids), total=total)
 
     def _get_tasks_overviews(self, task_ids: list[str]) -> list[TaskOverview]:
@@ -294,9 +335,266 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 date_started=get_timestamp(task_data, "date_started"),
                 date_done=get_timestamp(task_data, "date_done"),
                 execution_time=get_execution_time(task_data),
+                queue_name=task_data.get("queue_name", "unknown"),
             )
             for task_data in pipeline.execute()
         ]
+
+    def get_task_type_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
+
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        )
+        if not task_ids:
+            return []
+
+        pipeline = self.client.pipeline()
+        for task_id in task_ids:
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+
+        if date_from and date_to:
+            range_hours = (date_to - date_from).total_seconds() / 3600
+        else:
+            range_hours = 24 * 30
+
+        if range_hours <= 48:
+            bucket_seconds = 3600
+        elif range_hours <= 14 * 24:
+            bucket_seconds = 6 * 3600
+        else:
+            bucket_seconds = 24 * 3600
+
+        buckets: dict = defaultdict(
+            lambda: {
+                "count": 0,
+                "success": 0,
+                "failure": 0,
+                "runtimes": [],
+                "waits": [],
+            }
+        )
+
+        for task_data in pipeline.execute():
+            if task_data.get("task_name") != task_name:
+                continue
+            done_ts = task_data.get("date_done")
+            if not done_ts:
+                continue
+            try:
+                bucket_ts = int(float(done_ts) // bucket_seconds) * bucket_seconds
+            except (ValueError, TypeError):
+                continue
+
+            status = task_data.get("status")
+            buckets[bucket_ts]["count"] += 1
+            if status == "SUCCESS":
+                buckets[bucket_ts]["success"] += 1
+            elif status == "FAILURE":
+                buckets[bucket_ts]["failure"] += 1
+            runtime = get_execution_time(task_data)
+            if runtime is not None:
+                buckets[bucket_ts]["runtimes"].append(runtime)
+            wait = get_wait_time(task_data)
+            if wait is not None:
+                buckets[bucket_ts]["waits"].append(wait)
+
+        result = []
+        for bucket_ts in sorted(buckets.keys()):
+            data = buckets[bucket_ts]
+            runtimes = data["runtimes"]
+            waits = data["waits"]
+            result.append(
+                TaskTypeTimeSeries(
+                    bucket=datetime.fromtimestamp(bucket_ts, tz=dt_timezone.utc),
+                    count=data["count"],
+                    success_count=data["success"],
+                    failure_count=data["failure"],
+                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
+                    min_runtime=min(runtimes) if runtimes else None,
+                    max_runtime=max(runtimes) if runtimes else None,
+                    avg_wait=sum(waits) / len(waits) if waits else None,
+                    min_wait=min(waits) if waits else None,
+                    max_wait=max(waits) if waits else None,
+                )
+            )
+        return result
+
+    def get_throughput_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
+
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        )
+        if not task_ids:
+            return [], []
+
+        pipeline = self.client.pipeline()
+        for task_id in task_ids:
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+
+        queued: list[datetime] = []
+        started: list[datetime] = []
+
+        for task_data in pipeline.execute():
+            if task_data.get("task_name") != task_name:
+                continue
+
+            created_ts = task_data.get("date_created")
+            if created_ts:
+                with contextlib.suppress(ValueError, TypeError):
+                    queued.append(
+                        datetime.fromtimestamp(float(created_ts), tz=dt_timezone.utc)
+                    )
+
+            started_ts = task_data.get("date_started")
+            if started_ts:
+                with contextlib.suppress(ValueError, TypeError):
+                    started.append(
+                        datetime.fromtimestamp(float(started_ts), tz=dt_timezone.utc)
+                    )
+
+        return sorted(queued), sorted(started)
+
+    def get_queue_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
+
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        )
+        if not task_ids:
+            return []
+
+        pipeline = self.client.pipeline()
+        for task_id in task_ids:
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+
+        if date_from and date_to:
+            range_hours = (date_to - date_from).total_seconds() / 3600
+        else:
+            range_hours = 24 * 30
+
+        if range_hours <= 48:
+            bucket_seconds = 3600
+        elif range_hours <= 14 * 24:
+            bucket_seconds = 6 * 3600
+        else:
+            bucket_seconds = 24 * 3600
+
+        buckets: dict = defaultdict(
+            lambda: {
+                "count": 0,
+                "success": 0,
+                "failure": 0,
+                "runtimes": [],
+                "waits": [],
+            }
+        )
+
+        for task_data in pipeline.execute():
+            if task_data.get("queue_name") != queue_name:
+                continue
+            done_ts = task_data.get("date_done")
+            if not done_ts:
+                continue
+            try:
+                bucket_ts = int(float(done_ts) // bucket_seconds) * bucket_seconds
+            except (ValueError, TypeError):
+                continue
+
+            status = task_data.get("status")
+            buckets[bucket_ts]["count"] += 1
+            if status == "SUCCESS":
+                buckets[bucket_ts]["success"] += 1
+            elif status == "FAILURE":
+                buckets[bucket_ts]["failure"] += 1
+            runtime = get_execution_time(task_data)
+            if runtime is not None:
+                buckets[bucket_ts]["runtimes"].append(runtime)
+            wait = get_wait_time(task_data)
+            if wait is not None:
+                buckets[bucket_ts]["waits"].append(wait)
+
+        result = []
+        for bucket_ts in sorted(buckets.keys()):
+            data = buckets[bucket_ts]
+            runtimes = data["runtimes"]
+            waits = data["waits"]
+            result.append(
+                TaskTypeTimeSeries(
+                    bucket=datetime.fromtimestamp(bucket_ts, tz=dt_timezone.utc),
+                    count=data["count"],
+                    success_count=data["success"],
+                    failure_count=data["failure"],
+                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
+                    min_runtime=min(runtimes) if runtimes else None,
+                    max_runtime=max(runtimes) if runtimes else None,
+                    avg_wait=sum(waits) / len(waits) if waits else None,
+                    min_wait=min(waits) if waits else None,
+                    max_wait=max(waits) if waits else None,
+                )
+            )
+        return result
+
+    def get_queue_throughput_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        start_time = date_from.timestamp() if date_from else float("-inf")
+        end_time = date_to.timestamp() if date_to else float("inf")
+
+        task_ids = self.client.zrangebyscore(
+            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        )
+        if not task_ids:
+            return [], []
+
+        pipeline = self.client.pipeline()
+        for task_id in task_ids:
+            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+
+        queued: list[datetime] = []
+        started: list[datetime] = []
+
+        for task_data in pipeline.execute():
+            if task_data.get("queue_name") != queue_name:
+                continue
+
+            created_ts = task_data.get("date_created")
+            if created_ts:
+                with contextlib.suppress(ValueError, TypeError):
+                    queued.append(
+                        datetime.fromtimestamp(float(created_ts), tz=dt_timezone.utc)
+                    )
+
+            started_ts = task_data.get("date_started")
+            if started_ts:
+                with contextlib.suppress(ValueError, TypeError):
+                    started.append(
+                        datetime.fromtimestamp(float(started_ts), tz=dt_timezone.utc)
+                    )
+
+        return sorted(queued), sorted(started)
 
     def get_tasks_names(self) -> list[str]:
         return sorted(self.client.smembers(REDIS_KEY_TASKS_NAMES))
@@ -313,6 +611,19 @@ def get_execution_time(task_data: dict) -> float | None:
 
     with contextlib.suppress(ValueError, TypeError):
         elapsed = float(done) - float(started)
+        return elapsed if elapsed >= 0 else None
+
+    return None
+
+
+def get_wait_time(task_data: dict) -> float | None:
+    created = task_data.get("date_created")
+    started = task_data.get("date_started")
+    if not created or not started:
+        return None
+
+    with contextlib.suppress(ValueError, TypeError):
+        elapsed = float(started) - float(created)
         return elapsed if elapsed >= 0 else None
 
     return None

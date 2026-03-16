@@ -6,6 +6,9 @@
 {% block extrastyle %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+    <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
 {% endblock %}
 {% block content %}
     {% if is_redis %}
@@ -14,17 +17,19 @@
             <div class="filter-row">
                 <div class="filter-group">
                     <label>From:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_from"
                            id="date_from"
-                           value="{{ filters.date_from }}">
+                           placeholder="From"
+                           value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">
                 </div>
                 <div class="filter-group">
                     <label>To:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_to"
                            id="date_to"
-                           value="{{ filters.date_to }}">
+                           placeholder="To"
+                           value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
                 </div>
                 <div class="filter-group">
                     <button type="submit">Apply</button>
@@ -45,6 +50,7 @@
                                 {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
                         <option value="STARTED"
                                 {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
+                        <option value="QUEUED" {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
                         <option value="PENDING"
                                 {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
                         <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
@@ -79,16 +85,18 @@
             <div class="filter-row">
                 <div class="filter-group">
                     <label>From:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_from"
                            id="date_from"
+                           placeholder="From"
                            value="{{ filters.date_from }}">
                 </div>
                 <div class="filter-group">
                     <label>To:</label>
-                    <input type="datetime-local"
+                    <input type="text"
                            name="date_to"
                            id="date_to"
+                           placeholder="To"
                            value="{{ filters.date_to }}">
                 </div>
             </div>
@@ -99,6 +107,7 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
 });
         </script>
     {% endif %}
+    <script>initFlatpickrDateRange();</script>
     <div class="table-meta">
         <span>{{ total }} task{{ total|pluralize }} total</span>
         {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}
@@ -109,6 +118,7 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
                 <th>Task ID</th>
                 <th>Task Name</th>
                 <th>Status</th>
+                <th>Queue</th>
                 <th>Worker</th>
                 <th>Started</th>
                 <th>Completed</th>
@@ -126,6 +136,7 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
                     <td>
                         <span class="status-badge {{ task.status }}">{{ task.status }}</span>
                     </td>
+                    <td>{{ task.queue_name|default:"-" }}</td>
                     <td>{{ task.worker|default:"-" }}</td>
                     <td>{{ task.date_started|default:"-" }}</td>
                     <td>{{ task.date_done|default:"-" }}</td>
@@ -147,7 +158,7 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="8" class="empty-row">No tasks found.</td>
+                    <td colspan="9" class="empty-row">No tasks found.</td>
                 </tr>
             {% endfor %}
         </tbody>

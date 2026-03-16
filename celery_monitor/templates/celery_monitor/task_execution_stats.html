@@ -5,6 +5,9 @@
 {% block extrastyle %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'celery_monitor/monitor.css' %}">
+    <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
 {% endblock %}
 {% block content %}
     <form class="filters" method="get" id="time-range-form">
@@ -42,28 +45,21 @@
         </div>
         <div class="filter-group">
             <label>Custom Range:</label>
-            <input type="datetime-local"
+            <input type="text"
                    name="date_from"
                    id="date_from"
-                   value="{{ filters.date_from }}">
+                   placeholder="From"
+                   value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">
             <span>to</span>
-            <input type="datetime-local"
+            <input type="text"
                    name="date_to"
                    id="date_to"
-                   value="{{ filters.date_to }}">
+                   placeholder="To"
+                   value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
             <button type="submit" onclick="clearHoursParam();">Apply</button>
         </div>
     </form>
-    <script>
-function clearCustomDates() {
-  document.getElementById('date_from').value = '';
-  document.getElementById('date_to').value = '';
-}
-
-function clearHoursParam() {
-  document.getElementById('hours').value = '';
-}
-    </script>
+    <script>initFlatpickrDateRange();</script>
     {% if execution_stats %}
         <table class="task-execution-table">
             <thead>
@@ -146,12 +142,47 @@ function clearHoursParam() {
                             {% endif %}
                         </a>
                     </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=min_wait&order={% if filters.sort_by == 'min_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Min Wait
+                            {% if filters.sort_by == 'min_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=avg_wait&order={% if filters.sort_by == 'avg_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Avg Wait
+                            {% if filters.sort_by == 'avg_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=max_wait&order={% if filters.sort_by == 'max_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Max Wait
+                            {% if filters.sort_by == 'max_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody>
                 {% for stat in execution_stats %}
                     <tr>
-                        <td class="task-name">{{ stat.task_name }}</td>
+                        <td class="task-name">
+                            <a href="{% url 'admin:celery_monitor_task_type_detail' %}?task_name={{ stat.task_name }}&hours={{ filters.hours_param }}">{{ stat.task_name }}</a>
+                        </td>
                         <td class="stat-count">{{ stat.total_count }}</td>
                         <td class="stat-count success">{{ stat.success_count }}</td>
                         <td class="stat-count failure">{{ stat.failure_count }}</td>
@@ -196,6 +227,51 @@ function clearHoursParam() {
                                     {% widthratio stat.max_runtime 60 1 %}m {% widthratio stat.max_runtime 1 1 %}s
                                 {% else %}
                                     {% widthratio stat.max_runtime 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.min_wait is not None %}
+                                {% if stat.min_wait < 1 %}
+                                    {{ stat.min_wait|floatformat:2 }}s
+                                {% elif stat.min_wait < 60 %}
+                                    {{ stat.min_wait|floatformat:1 }}s
+                                {% elif stat.min_wait < 3600 %}
+                                    {% widthratio stat.min_wait 60 1 %}m {% widthratio stat.min_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.min_wait 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.avg_wait %}
+                                {% if stat.avg_wait < 1 %}
+                                    {{ stat.avg_wait|floatformat:2 }}s
+                                {% elif stat.avg_wait < 60 %}
+                                    {{ stat.avg_wait|floatformat:1 }}s
+                                {% elif stat.avg_wait < 3600 %}
+                                    {% widthratio stat.avg_wait 60 1 %}m {% widthratio stat.avg_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.avg_wait 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.max_wait %}
+                                {% if stat.max_wait < 1 %}
+                                    {{ stat.max_wait|floatformat:2 }}s
+                                {% elif stat.max_wait < 60 %}
+                                    {{ stat.max_wait|floatformat:1 }}s
+                                {% elif stat.max_wait < 3600 %}
+                                    {% widthratio stat.max_wait 60 1 %}m {% widthratio stat.max_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.max_wait 3600 1 %}h
                                 {% endif %}
                             {% else %}
                                 <span class="no-data">—</span>

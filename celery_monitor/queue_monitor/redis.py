@@ -1,17 +1,28 @@
 import json
+import time
 from collections import defaultdict
 
 import redis
+from celery import current_app
 from redis import Redis
 
 from celery_monitor.models import QueueStats, QueueTaskTypeStats
 from celery_monitor.queue_monitor.base import QueueMonitor
+from celery_monitor.redis_keys import REDIS_KEY_QUEUE_LEN_STREAM
 
 
 class RedisMonitor(QueueMonitor):
     def __init__(self):
         super().__init__()
         self.redis: Redis = redis.from_url(self.broker_url)
+
+    def _get_results_backend_connection(self) -> Redis:
+        redis_url = current_app.conf.result_backend or current_app.conf.broker_url
+        return redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=3,
+        )
 
     def get_queue_task_types(self) -> list[QueueTaskTypeStats]:
         stats = []
@@ -64,3 +75,30 @@ class RedisMonitor(QueueMonitor):
             return headers.get("task") or decoded.get("task", "unknown")
         except (json.JSONDecodeError, KeyError):
             return None
+
+    def queue_length_history(self) -> dict:
+        queue_names = self.get_queue_names()
+
+        now_ms = int(time.time() * 1000)
+        start_ms = now_ms - 24 * 3600 * 1000
+
+        try:
+            r = self._get_results_backend_connection()
+            pipeline = r.pipeline()
+            for queue_name in queue_names:
+                stream_key = REDIS_KEY_QUEUE_LEN_STREAM.format(queue_name=queue_name)
+                pipeline.xrange(stream_key, min=start_ms, max=now_ms)
+            all_entries = pipeline.execute()
+
+            queues = {
+                queue_name: [
+                    {"x": int(entry_id.split("-")[0]), "y": int(fields["queue_len"])}
+                    for entry_id, fields in entries
+                ]
+                for queue_name, entries in zip(queue_names, all_entries, strict=False)
+            }
+
+        except Exception:
+            queues = {q: [] for q in queue_names}
+
+        return queues

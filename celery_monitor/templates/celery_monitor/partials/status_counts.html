@@ -15,6 +15,10 @@
         <span class="count">{{ status_counts.STARTED|default:"0" }}</span>
         <span class="label">Started</span>
     </div>
+    <div class="stat-card queued">
+        <span class="count">{{ status_counts.QUEUED|default:"0" }}</span>
+        <span class="label">Queued</span>
+    </div>
     <div class="stat-card pending">
         <span class="count">{{ status_counts.PENDING|default:"0" }}</span>
         <span class="label">Pending</span>

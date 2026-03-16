@@ -1,0 +1,10 @@
+<div class="filter-group task-type-selector" style="margin-bottom: 16px;">
+    <label for="{{ select_id }}">{{ label }}</label>
+    <select id="{{ select_id }}">
+        {% if not current_value %}<option value="" selected disabled>{{ placeholder }}</option>{% endif %}
+        {% for name in item_names %}
+            <option value="{{ name }}"{% if name == current_value %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+    </select>
+</div>
+<script>initDetailSelector('{{ select_id }}', '{{ param_name }}', '{{ placeholder }}');</script>

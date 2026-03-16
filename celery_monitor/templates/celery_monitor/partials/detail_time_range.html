@@ -1,0 +1,53 @@
+<form class="filters" method="get" id="time-range-form">
+    <input type="hidden"
+           name="{{ selector_param }}"
+           value="{{ selector_value }}">
+    <input type="hidden"
+           name="hours"
+           id="hours"
+           value="{{ filters.hours_param }}">
+    <div class="filter-group">
+        <label>Time Range:</label>
+        <button type="button"
+                {% if filters.hours_param == '1' %}class="active"{% endif %}
+                onclick="clearCustomDates(); document.getElementById('hours').value=1; document.getElementById('time-range-form').submit();">
+            1h
+        </button>
+        <button type="button"
+                {% if filters.hours_param == '24' %}class="active"{% endif %}
+                onclick="clearCustomDates(); document.getElementById('hours').value=24; document.getElementById('time-range-form').submit();">
+            24h
+        </button>
+        <button type="button"
+                {% if filters.hours_param == '168' %}class="active"{% endif %}
+                onclick="clearCustomDates(); document.getElementById('hours').value=168; document.getElementById('time-range-form').submit();">
+            7d
+        </button>
+        <button type="button"
+                {% if filters.hours_param == '720' %}class="active"{% endif %}
+                onclick="clearCustomDates(); document.getElementById('hours').value=720; document.getElementById('time-range-form').submit();">
+            30d
+        </button>
+        <button type="button"
+                {% if filters.hours_param == 'all' %}class="active"{% endif %}
+                onclick="clearCustomDates(); document.getElementById('hours').value='all'; document.getElementById('time-range-form').submit();">
+            All
+        </button>
+    </div>
+    <div class="filter-group">
+        <label>Custom Range:</label>
+        <input type="text"
+               name="date_from"
+               id="date_from"
+               placeholder="From"
+               value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">
+        <span>to</span>
+        <input type="text"
+               name="date_to"
+               id="date_to"
+               placeholder="To"
+               value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
+        <button type="submit" onclick="clearHoursParam();">Apply</button>
+    </div>
+</form>
+<script>initFlatpickrDateRange();</script>

@@ -71,6 +71,12 @@ class TestNoopSignalsResultBackend:
         )
         assert result is None
 
+    def test_task_published_handler_does_nothing(self, backend):
+        result = backend.task_published_handler(
+            sender="tasks.add", headers={"id": "t1"}, body=None, routing_key="default"
+        )
+        assert result is None
+
     def test_task_failure_handler_does_nothing(self, backend):
         result = backend.task_failure_handler(task_id="t1", exception=ValueError("e"))
         assert result is None
@@ -108,12 +114,75 @@ class TestRedisSignalsResultBackend:
         task.request.hostname = hostname
         return task
 
+    def test_task_published_handler_stores_initial_task_data(self, backend, fake_redis):
+        backend.task_published_handler(
+            sender="tasks.add",
+            headers={"id": "t1", "task": "tasks.add"},
+            body=None,
+            routing_key="high_priority",
+        )
+
+        data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
+        assert data["task_id"] == "t1"
+        assert data["task_name"] == "tasks.add"
+        assert data["queue_name"] == "high_priority"
+        assert data["status"] == "QUEUED"
+        assert "date_created" in data
+
+    def test_task_published_handler_adds_to_recent_tasks(self, backend, fake_redis):
+        backend.task_published_handler(
+            sender="tasks.add", headers={"id": "t1"}, body=None, routing_key="default"
+        )
+
+        assert fake_redis.zscore(REDIS_KEY_RECENT_TASKS, "t1") is not None
+
+    def test_task_published_handler_tracks_task_name(self, backend, fake_redis):
+        backend.task_published_handler(
+            sender="tasks.process",
+            headers={"id": "t1"},
+            body=None,
+            routing_key="default",
+        )
+
+        assert fake_redis.sismember(REDIS_KEY_TASKS_NAMES, "tasks.process")
+
+    def test_task_published_handler_increments_queued_count(self, backend, fake_redis):
+        backend.task_published_handler(
+            sender="tasks.add", headers={"id": "t1"}, body=None, routing_key="default"
+        )
+
+        assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "QUEUED") == "1"
+
+    def test_task_published_handler_skips_missing_task_id(self, backend, fake_redis):
+        backend.task_published_handler(
+            sender="tasks.add", headers={}, body=None, routing_key="default"
+        )
+
+        assert fake_redis.hgetall(REDIS_KEY_STATUS_COUNTS) == {}
+
+    def test_prerun_after_published_transitions_queued_to_started(
+        self, backend, fake_redis
+    ):
+        backend.task_published_handler(
+            sender="tasks.add",
+            headers={"id": "t1", "task": "tasks.add"},
+            body=None,
+            routing_key="default",
+        )
+        task = self._make_task()
+        backend.task_prerun_handler(task_id="t1", task=task, args=[], kwargs={})
+
+        assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "QUEUED") == "0"
+        assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "STARTED") == "1"
+        data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
+        assert data["task_id"] == "t1"
+        assert data["status"] == "STARTED"
+
     def test_task_prerun_handler_stores_task_data(self, backend, fake_redis):
         task = self._make_task()
         backend.task_prerun_handler(task_id="t1", task=task, args=[1, 2], kwargs={})
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["task_id"] == "t1"
         assert data["task_name"] == "tasks.add"
         assert data["status"] == "STARTED"
         assert data["worker"] == "worker1@host"

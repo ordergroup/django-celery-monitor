@@ -1,15 +1,18 @@
+import json
 import math
 
 from celery import current_app
 from django.contrib.admin import AdminSite
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse
 from django.template.response import TemplateResponse
 from django.views.decorators.http import require_POST
 
 from celery_monitor.filters import (
+    QueueDetailFilters,
     RecentTasksFilters,
     TaskExecutionStatsFilters,
     TaskResultsFilters,
+    TaskTypeDetailFilters,
     WorkerStatsFilters,
 )
 from celery_monitor.queue_monitor import get_queue_monitor
@@ -61,6 +64,12 @@ def redis_queue_task_types_view(request: HttpRequest):
     )
 
 
+def redis_queue_history_view(request: HttpRequest):
+    queue_monitor = get_queue_monitor()
+    queues = queue_monitor.queue_length_history()
+    return JsonResponse({"queues": queues})
+
+
 def worker_stats_view(request: HttpRequest):
     filters = WorkerStatsFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -89,19 +98,23 @@ def reserved_tasks_view(request: HttpRequest):
 def recent_tasks_view(request: HttpRequest):
     filters = RecentTasksFilters.from_request(request)
     results_monitor = get_results_monitor()
+    queue_monitor = get_queue_monitor()
     data = results_monitor.get_recent_tasks(
         status=filters.status,
         task_name=filters.task_name,
+        queue_name=filters.queue_name,
         worker=filters.worker,
         limit=filters.limit,
     )
     task_names = results_monitor.get_tasks_names()
+    queue_names = queue_monitor.get_queue_names()
     workers = results_monitor.get_workers_names()
 
     context = {
         "recent_tasks": data,
         "filters": filters,
         "task_names": task_names,
+        "queue_names": queue_names,
         "workers": workers,
     }
     return TemplateResponse(
@@ -185,6 +198,172 @@ def task_results(request: HttpRequest, site: AdminSite):
         "is_redis": is_redis_backend(),
     }
     return TemplateResponse(request, "celery_monitor/task_results.html", context)
+
+
+def task_type_detail_view(request: HttpRequest, site: AdminSite):
+    filters = TaskTypeDetailFilters.from_request(request)
+    results_monitor = get_results_monitor()
+    task_names = sorted(results_monitor.get_tasks_names())
+
+    if not filters.task_name:
+        context = {
+            **site.each_context(request),
+            "title": "Task Type Detail",
+            "task_names": task_names,
+            "task_name": None,
+        }
+        return TemplateResponse(
+            request, "celery_monitor/task_type_detail.html", context
+        )
+
+    time_series = results_monitor.get_task_type_time_series(
+        task_name=filters.task_name,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+    )
+    result = results_monitor.get_tasks(
+        task_name=filters.task_name,
+        status=filters.status,
+        worker=filters.worker,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+        page=filters.page,
+        page_size=filters.page_size,
+    )
+    total_pages = max(1, math.ceil(result.total / filters.page_size))
+    workers = results_monitor.get_workers_names()
+
+    queued_timestamps, started_timestamps = results_monitor.get_throughput_time_series(
+        task_name=filters.task_name,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+    )
+    # Build cumulative step series: each point is {x: iso_timestamp, y: cumulative_count}
+    queued_cumulative = [
+        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(queued_timestamps)
+    ]
+    started_cumulative = [
+        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(started_timestamps)
+    ]
+
+    chart_data = {
+        "labels": [ts.bucket.isoformat() for ts in time_series],
+        "counts": [ts.count for ts in time_series],
+        "success_counts": [ts.success_count for ts in time_series],
+        "failure_counts": [ts.failure_count for ts in time_series],
+        "runtime": {
+            "avg": [ts.avg_runtime for ts in time_series],
+            "min": [ts.min_runtime for ts in time_series],
+            "max": [ts.max_runtime for ts in time_series],
+        },
+        "wait": {
+            "avg": [ts.avg_wait for ts in time_series],
+            "min": [ts.min_wait for ts in time_series],
+            "max": [ts.max_wait for ts in time_series],
+        },
+        "throughput": {
+            "queued": queued_cumulative,
+            "started": started_cumulative,
+        },
+    }
+
+    context = {
+        **site.each_context(request),
+        "title": filters.task_name,
+        "task_name": filters.task_name,
+        "task_names": task_names,
+        "tasks": result.tasks,
+        "total": result.total,
+        "workers": workers,
+        "filters": filters,
+        "total_pages": total_pages,
+        "is_redis": is_redis_backend(),
+        "chart_data_json": json.dumps(chart_data),
+    }
+    return TemplateResponse(request, "celery_monitor/task_type_detail.html", context)
+
+
+def queue_detail_view(request: HttpRequest, site: AdminSite):
+    filters = QueueDetailFilters.from_request(request)
+    queue_monitor = get_queue_monitor()
+    queue_names = sorted(queue_monitor.get_queue_names())
+
+    if not filters.queue_name:
+        context = {
+            **site.each_context(request),
+            "title": "Queue Detail",
+            "queue_names": queue_names,
+            "queue_name": None,
+        }
+        return TemplateResponse(request, "celery_monitor/queue_detail.html", context)
+
+    results_monitor = get_results_monitor()
+    time_series = results_monitor.get_queue_time_series(
+        queue_name=filters.queue_name,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+    )
+    result = results_monitor.get_tasks(
+        queue_name=filters.queue_name,
+        status=filters.status,
+        worker=filters.worker,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+        page=filters.page,
+        page_size=filters.page_size,
+    )
+    total_pages = max(1, math.ceil(result.total / filters.page_size))
+    workers = results_monitor.get_workers_names()
+
+    queued_timestamps, started_timestamps = (
+        results_monitor.get_queue_throughput_time_series(
+            queue_name=filters.queue_name,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
+        )
+    )
+    queued_cumulative = [
+        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(queued_timestamps)
+    ]
+    started_cumulative = [
+        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(started_timestamps)
+    ]
+
+    chart_data = {
+        "labels": [ts.bucket.isoformat() for ts in time_series],
+        "counts": [ts.count for ts in time_series],
+        "success_counts": [ts.success_count for ts in time_series],
+        "failure_counts": [ts.failure_count for ts in time_series],
+        "runtime": {
+            "avg": [ts.avg_runtime for ts in time_series],
+            "min": [ts.min_runtime for ts in time_series],
+            "max": [ts.max_runtime for ts in time_series],
+        },
+        "wait": {
+            "avg": [ts.avg_wait for ts in time_series],
+            "min": [ts.min_wait for ts in time_series],
+            "max": [ts.max_wait for ts in time_series],
+        },
+        "throughput": {
+            "queued": queued_cumulative,
+            "started": started_cumulative,
+        },
+    }
+
+    context = {
+        **site.each_context(request),
+        "title": filters.queue_name,
+        "queue_name": filters.queue_name,
+        "queue_names": queue_names,
+        "tasks": result.tasks,
+        "total": result.total,
+        "workers": workers,
+        "filters": filters,
+        "total_pages": total_pages,
+        "is_redis": is_redis_backend(),
+        "chart_data_json": json.dumps(chart_data),
+    }
+    return TemplateResponse(request, "celery_monitor/queue_detail.html", context)
 
 
 @require_POST

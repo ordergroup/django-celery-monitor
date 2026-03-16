@@ -4,7 +4,18 @@ from celery import signals
 
 from celery_monitor.signals_backend import get_signals_backend
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
+
+
+@signals.after_task_publish.connect
+def task_published_handler(
+    sender=None, headers=None, body=None, routing_key=None, **kwargs
+):
+    from celery import current_app
+
+    get_signals_backend(current_app).task_published_handler(
+        sender, headers, body, routing_key, **kwargs
+    )
 
 
 @signals.task_prerun.connect

@@ -33,6 +33,8 @@
         </div>
         <div class="label">Worker</div>
         <div class="value">{{ task.worker|default:"-" }}</div>
+        <div class="label">Queue</div>
+        <div class="value">{{ task.queue_name|default:"-" }}</div>
         <div class="label">Created</div>
         <div class="value">{{ task.date_created }}</div>
         <div class="label">Started</div>

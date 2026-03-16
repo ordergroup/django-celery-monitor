@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from django.core.cache import cache
 from django.db.models import Avg, Count, F, Max, Min, Q
+from django.db.models.functions import TruncDay, TruncHour
 from django.utils import timezone
 from django_celery_results.models import TaskResult
 
@@ -13,13 +14,14 @@ from celery_monitor.models import (
     TaskExecutionStats,
     TaskOverview,
     TasksPage,
+    TaskTypeTimeSeries,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import is_postgres
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
@@ -108,8 +110,15 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     date_to = timezone.make_aware(date_to)
                 queryset = queryset.filter(date_done__lte=date_to)
 
-            runtime_fields = {"avg_runtime", "min_runtime", "max_runtime"}
-            if sort_by in runtime_fields:
+            nullable_fields = {
+                "avg_runtime",
+                "min_runtime",
+                "max_runtime",
+                "avg_wait",
+                "min_wait",
+                "max_wait",
+            }
+            if sort_by in nullable_fields:
                 if sort_order == "desc":
                     order_expr = F(sort_by).desc(nulls_last=True)
                 else:
@@ -123,6 +132,10 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     total_count=Count("id"),
                     success_count=Count("id", filter=Q(status="SUCCESS")),
                     failure_count=Count("id", filter=Q(status="FAILURE")),
+                    queued_count=Count(
+                        "id", filter=Q(status__in=("QUEUED", "PENDING"))
+                    ),
+                    started_count=Count("id", filter=Q(status="STARTED")),
                     avg_runtime=Avg(
                         F("date_done") - F("date_started"),
                         filter=Q(
@@ -147,6 +160,27 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                             date_done__isnull=False,
                         ),
                     ),
+                    avg_wait=Avg(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
+                    min_wait=Min(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
+                    max_wait=Max(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
                 )
                 .order_by(order_expr)
             )
@@ -165,15 +199,32 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                 if stat["max_runtime"]:
                     max_seconds = stat["max_runtime"].total_seconds()
 
+                avg_wait_seconds = None
+                if stat["avg_wait"]:
+                    avg_wait_seconds = stat["avg_wait"].total_seconds()
+
+                min_wait_seconds = None
+                if stat["min_wait"]:
+                    min_wait_seconds = stat["min_wait"].total_seconds()
+
+                max_wait_seconds = None
+                if stat["max_wait"]:
+                    max_wait_seconds = stat["max_wait"].total_seconds()
+
                 result.append(
                     TaskExecutionStats(
                         task_name=stat["task_name"],
                         total_count=stat["total_count"],
                         success_count=stat["success_count"],
                         failure_count=stat["failure_count"],
+                        queued_count=stat["queued_count"],
+                        started_count=stat["started_count"],
                         avg_runtime=avg_seconds,
                         min_runtime=min_seconds,
                         max_runtime=max_seconds,
+                        avg_wait=avg_wait_seconds,
+                        min_wait=min_wait_seconds,
+                        max_wait=max_wait_seconds,
                     )
                 )
 
@@ -187,6 +238,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]:
@@ -223,8 +275,13 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                         date_started=task.date_started,
                         date_done=task.date_done,
                         execution_time=execution_time,
+                        queue_name="unknown",  # TODO: we probably need a signals similar to redis to get the queue_name
                     )
                 )
+
+            if queue_name:
+                # TODO: find a way to filter by queue_name
+                pass
 
             return recent_tasks
 
@@ -253,6 +310,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                 periodic_task_name=None,
                 exception=None,
                 exception_type=None,
+                queue_name="unknown",  # TODO: we probably need a signals similar to redis to get the queue_name
             )
 
         except TaskResult.DoesNotExist:
@@ -265,6 +323,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
@@ -309,6 +368,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                         date_started=task.date_started,
                         date_done=task.date_done,
                         execution_time=execution_time,
+                        queue_name=None,
                     )
                 )
 
@@ -317,6 +377,155 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         except Exception as e:
             logger.exception("Error getting tasks: %s", e)
             return TasksPage(tasks=[], total=0)
+
+    def get_task_type_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        try:
+            queryset = TaskResult.objects.filter(task_name=task_name)
+
+            if date_from:
+                if timezone.is_naive(date_from):
+                    date_from = timezone.make_aware(date_from)
+                queryset = queryset.filter(date_done__gte=date_from)
+            if date_to:
+                if timezone.is_naive(date_to):
+                    date_to = timezone.make_aware(date_to)
+                queryset = queryset.filter(date_done__lte=date_to)
+
+            if date_from and date_to:
+                range_hours = (date_to - date_from).total_seconds() / 3600
+            else:
+                range_hours = 24 * 30
+
+            trunc_fn = TruncHour if range_hours <= 48 else TruncDay
+
+            stats = (
+                queryset.annotate(bucket=trunc_fn("date_done"))
+                .values("bucket")
+                .annotate(
+                    count=Count("id"),
+                    success_count=Count("id", filter=Q(status="SUCCESS")),
+                    failure_count=Count("id", filter=Q(status="FAILURE")),
+                    avg_runtime=Avg(
+                        F("date_done") - F("date_started"),
+                        filter=Q(date_started__isnull=False, date_done__isnull=False),
+                    ),
+                    min_runtime=Min(
+                        F("date_done") - F("date_started"),
+                        filter=Q(date_started__isnull=False, date_done__isnull=False),
+                    ),
+                    max_runtime=Max(
+                        F("date_done") - F("date_started"),
+                        filter=Q(date_started__isnull=False, date_done__isnull=False),
+                    ),
+                    avg_wait=Avg(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False, date_created__isnull=False
+                        ),
+                    ),
+                    min_wait=Min(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False, date_created__isnull=False
+                        ),
+                    ),
+                    max_wait=Max(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False, date_created__isnull=False
+                        ),
+                    ),
+                )
+                .order_by("bucket")
+            )
+
+            return [
+                TaskTypeTimeSeries(
+                    bucket=stat["bucket"],
+                    count=stat["count"],
+                    success_count=stat["success_count"],
+                    failure_count=stat["failure_count"],
+                    avg_runtime=stat["avg_runtime"].total_seconds()
+                    if stat["avg_runtime"]
+                    else None,
+                    min_runtime=stat["min_runtime"].total_seconds()
+                    if stat["min_runtime"]
+                    else None,
+                    max_runtime=stat["max_runtime"].total_seconds()
+                    if stat["max_runtime"]
+                    else None,
+                    avg_wait=stat["avg_wait"].total_seconds()
+                    if stat["avg_wait"]
+                    else None,
+                    min_wait=stat["min_wait"].total_seconds()
+                    if stat["min_wait"]
+                    else None,
+                    max_wait=stat["max_wait"].total_seconds()
+                    if stat["max_wait"]
+                    else None,
+                )
+                for stat in stats
+            ]
+
+        except Exception as e:
+            logger.exception("Error getting task type time series: %s", e)
+            return []
+
+    def get_throughput_time_series(
+        self,
+        task_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        try:
+            base_qs = TaskResult.objects.filter(task_name=task_name)
+            if date_from:
+                if timezone.is_naive(date_from):
+                    date_from = timezone.make_aware(date_from)
+                base_qs = base_qs.filter(date_done__gte=date_from)
+            if date_to:
+                if timezone.is_naive(date_to):
+                    date_to = timezone.make_aware(date_to)
+                base_qs = base_qs.filter(date_done__lte=date_to)
+
+            queued = sorted(
+                base_qs.filter(date_created__isnull=False).values_list(
+                    "date_created", flat=True
+                )
+            )
+            started = sorted(
+                base_qs.filter(date_started__isnull=False).values_list(
+                    "date_started", flat=True
+                )
+            )
+            return queued, started
+
+        except Exception as e:
+            logger.exception("Error getting throughput time series: %s", e)
+            return [], []
+
+    def get_queue_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[TaskTypeTimeSeries]:
+        # queue_name is not stored in django-celery-results TaskResult
+        return []
+
+    def get_queue_throughput_time_series(
+        self,
+        queue_name: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[datetime], list[datetime]]:
+        # queue_name is not stored in django-celery-results TaskResult
+        return [], []
 
     def get_tasks_names(self) -> list[str]:
         return cache.get_or_set(

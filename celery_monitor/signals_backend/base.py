@@ -4,7 +4,7 @@ from functools import wraps
 
 from celery import Celery
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("celery_monitor")
 
 
 def safe_signal_handler(func):
@@ -27,6 +27,12 @@ def safe_signal_handler(func):
 class SignalsResultBackend(ABC):
     def __init__(self, app: Celery):
         self.app = app
+
+    @abstractmethod
+    @safe_signal_handler
+    def task_published_handler(
+        self, sender=None, headers=None, body=None, routing_key=None, **kwargs
+    ): ...
 
     @abstractmethod
     @safe_signal_handler
