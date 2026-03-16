@@ -18,12 +18,13 @@
 {% block content %}
     {% include "celery_monitor/partials/detail_selector.html" with select_id="task-type-select" label="Task Type:" param_name="task_name" item_names=task_names current_value=task_name placeholder="-- select a task type --" %}
     {% if not task_name %}
-    <p style="color: var(--body-quiet-color, #666); margin-top: 24px;">Select a task type above to view its details.</p>
+        <p style="color: var(--body-quiet-color, #666); margin-top: 24px;">Select a task type above to view its details.</p>
     {% else %}
-    {% with selector_param="task_name" selector_value=task_name %}
-        {% include "celery_monitor/partials/detail_time_range.html" %}
-        {% include "celery_monitor/partials/detail_charts.html" %}
-        {% include "celery_monitor/partials/detail_tasks_section.html" %}
-    {% endwith %}
-    {% endif %}{# end if task_name #}
+        {% with selector_param="task_name" selector_value=task_name %}
+            {% include "celery_monitor/partials/detail_time_range.html" %}
+            {% include "celery_monitor/partials/detail_charts.html" %}
+            {% include "celery_monitor/partials/detail_tasks_section.html" %}
+        {% endwith %}
+    {% endif %}
+    {# end if task_name #}
 {% endblock %}

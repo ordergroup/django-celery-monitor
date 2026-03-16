@@ -18,12 +18,13 @@
 {% block content %}
     {% include "celery_monitor/partials/detail_selector.html" with select_id="queue-select" label="Queue:" param_name="queue_name" item_names=queue_names current_value=queue_name placeholder="-- select a queue --" %}
     {% if not queue_name %}
-    <p style="color: var(--body-quiet-color, #666); margin-top: 24px;">Select a queue above to view its details.</p>
+        <p style="color: var(--body-quiet-color, #666); margin-top: 24px;">Select a queue above to view its details.</p>
     {% else %}
-    {% with selector_param="queue_name" selector_value=queue_name %}
-        {% include "celery_monitor/partials/detail_time_range.html" %}
-        {% include "celery_monitor/partials/detail_charts.html" %}
-        {% include "celery_monitor/partials/detail_tasks_section.html" %}
-    {% endwith %}
-    {% endif %}{# end if queue_name #}
+        {% with selector_param="queue_name" selector_value=queue_name %}
+            {% include "celery_monitor/partials/detail_time_range.html" %}
+            {% include "celery_monitor/partials/detail_charts.html" %}
+            {% include "celery_monitor/partials/detail_tasks_section.html" %}
+        {% endwith %}
+    {% endif %}
+    {# end if queue_name #}
 {% endblock %}

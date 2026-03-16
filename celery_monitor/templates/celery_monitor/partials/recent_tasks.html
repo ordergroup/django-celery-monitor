@@ -15,8 +15,7 @@
                         {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
                 <option value="STARTED"
                         {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
-                <option value="QUEUED"
-                        {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
+                <option value="QUEUED" {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
                 <option value="PENDING"
                         {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
                 <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>

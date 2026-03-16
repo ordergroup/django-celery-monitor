@@ -114,9 +114,7 @@ class TestRedisSignalsResultBackend:
         task.request.hostname = hostname
         return task
 
-    def test_task_published_handler_stores_initial_task_data(
-        self, backend, fake_redis
-    ):
+    def test_task_published_handler_stores_initial_task_data(self, backend, fake_redis):
         backend.task_published_handler(
             sender="tasks.add",
             headers={"id": "t1", "task": "tasks.add"},

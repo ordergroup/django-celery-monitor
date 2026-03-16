@@ -2,22 +2,37 @@
 <p class="section-title" style="margin-top:32px">Tasks</p>
 {% if not is_redis %}
     <form class="filters filters--rows" method="get" id="task-filters-form">
-        <input type="hidden" name="{{ selector_param }}" value="{{ selector_value }}">
+        <input type="hidden"
+               name="{{ selector_param }}"
+               value="{{ selector_value }}">
         <input type="hidden" name="hours" value="{{ filters.hours_param }}">
-        {% if filters.date_from %}<input type="hidden" name="date_from" value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">{% endif %}
-        {% if filters.date_to %}<input type="hidden" name="date_to" value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">{% endif %}
+        {% if filters.date_from %}
+            <input type="hidden"
+                   name="date_from"
+                   value="{{ filters.date_from|date:"Y-m-d\\TH:i" }}">
+        {% endif %}
+        {% if filters.date_to %}
+            <input type="hidden"
+                   name="date_to"
+                   value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
+        {% endif %}
         <div class="filter-row">
             <div class="filter-group">
                 <label for="status">Status:</label>
                 <select name="status" id="status">
                     <option value="">All</option>
-                    <option value="SUCCESS"  {% if filters.status == "SUCCESS"  %}selected{% endif %}>SUCCESS</option>
-                    <option value="FAILURE"  {% if filters.status == "FAILURE"  %}selected{% endif %}>FAILURE</option>
-                    <option value="STARTED"  {% if filters.status == "STARTED"  %}selected{% endif %}>STARTED</option>
-                    <option value="QUEUED"   {% if filters.status == "QUEUED"   %}selected{% endif %}>QUEUED</option>
-                    <option value="PENDING"  {% if filters.status == "PENDING"  %}selected{% endif %}>PENDING</option>
-                    <option value="RETRY"    {% if filters.status == "RETRY"    %}selected{% endif %}>RETRY</option>
-                    <option value="REVOKED"  {% if filters.status == "REVOKED"  %}selected{% endif %}>REVOKED</option>
+                    <option value="SUCCESS"
+                            {% if filters.status == "SUCCESS" %}selected{% endif %}>SUCCESS</option>
+                    <option value="FAILURE"
+                            {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
+                    <option value="STARTED"
+                            {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
+                    <option value="QUEUED" {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
+                    <option value="PENDING"
+                            {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
+                    <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
+                    <option value="REVOKED"
+                            {% if filters.status == "REVOKED" %}selected{% endif %}>REVOKED</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -64,7 +79,9 @@ document.getElementById('task-filters-form').addEventListener('change', function
                 <td class="task-id-cell">
                     <a href="{% url 'admin:celery_monitor_task_detail' task.task_id %}">{{ task.task_id|truncatechars:20 }}</a>
                 </td>
-                <td><span class="status-badge {{ task.status }}">{{ task.status }}</span></td>
+                <td>
+                    <span class="status-badge {{ task.status }}">{{ task.status }}</span>
+                </td>
                 <td>{{ task.queue_name|default:"-" }}</td>
                 <td>{{ task.worker|default:"-" }}</td>
                 <td>{{ task.date_started|default:"-" }}</td>
