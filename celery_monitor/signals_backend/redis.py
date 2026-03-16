@@ -26,6 +26,34 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         )
         self.redis_client = self._get_redis_client()
 
+    def task_published_handler(
+        self, sender=None, headers=None, body=None, routing_key=None, **kwargs
+    ):
+        now = timezone.now()
+        task_id = (headers or {}).get("id")
+        if not task_id:
+            return
+
+        task_name = sender or (headers or {}).get("task")
+        task_data = {
+            "task_id": task_id,
+            "task_name": task_name,
+            "queue_name": routing_key,
+            "status": "QUEUED",
+            "date_created": str(now.timestamp()),
+        }
+
+        pipeline = self.redis_client.pipeline()
+        pipeline.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=task_data)
+        pipeline.zadd(REDIS_KEY_RECENT_TASKS, {task_id: now.timestamp()})
+        if task_name:
+            pipeline.sadd(REDIS_KEY_TASKS_NAMES, task_name)
+        pipeline.hincrby(REDIS_KEY_STATUS_COUNTS, "QUEUED", 1)
+        pipeline.expire(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), self.task_data_ttl)
+        cutoff = now - timedelta(seconds=self.task_data_ttl)
+        pipeline.zremrangebyscore(REDIS_KEY_RECENT_TASKS, 0, cutoff.timestamp())
+        pipeline.execute()
+
     def task_prerun_handler(
         self, sender=None, task_id=None, task=None, args=None, kwargs=None, **kw
     ):
@@ -34,42 +62,47 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         worker = "unknown"
         if hasattr(task, "request") and task.request:
             worker = task.request.hostname or "unknown"
-
         if worker == "unknown":
             worker = kw.get("hostname", "unknown")
 
         task_args_str = json.dumps(args) if args else None
         task_kwargs_str = json.dumps(kwargs) if kwargs else None
 
-        task_data = {
-            "task_id": task_id,
-            "task_name": task.name,
+        update_data = {
             "status": "STARTED",
             "worker": worker,
-            "date_created": str(now.timestamp()),
             "date_started": str(now.timestamp()),
         }
-
         if task_args_str:
-            task_data["task_args"] = task_args_str
+            update_data["task_args"] = task_args_str
         if task_kwargs_str:
-            task_data["task_kwargs"] = task_kwargs_str
+            update_data["task_kwargs"] = task_kwargs_str
+
+        # Read existing status before pipeline to decide count transition
+        existing_status = self.redis_client.hget(
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "status"
+        )
 
         pipeline = self.redis_client.pipeline()
-
-        pipeline.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=task_data)
+        pipeline.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=update_data)
+        # Fallback: set date_created and task_name only if not already set by publish handler
+        pipeline.hsetnx(
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id),
+            "date_created",
+            str(now.timestamp()),
+        )
+        pipeline.hsetnx(
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "task_name", task.name
+        )
         pipeline.zadd(REDIS_KEY_RECENT_TASKS, {task_id: now.timestamp()})
         pipeline.sadd(REDIS_KEY_TASKS_NAMES, task.name)
         pipeline.sadd(REDIS_KEY_WORKERS_NAMES, worker)
+        if existing_status:
+            pipeline.hincrby(REDIS_KEY_STATUS_COUNTS, existing_status, -1)
         pipeline.hincrby(REDIS_KEY_STATUS_COUNTS, "STARTED", 1)
-
-        pipeline.expire(
-            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), self.task_data_ttl
-        )
-
+        pipeline.expire(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), self.task_data_ttl)
         cutoff = now - timedelta(seconds=self.task_data_ttl)
         pipeline.zremrangebyscore(REDIS_KEY_RECENT_TASKS, 0, cutoff.timestamp())
-
         pipeline.execute()
 
     def task_postrun_handler(

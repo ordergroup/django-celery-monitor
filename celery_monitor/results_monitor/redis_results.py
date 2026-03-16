@@ -131,6 +131,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 "success": 0,
                 "failure": 0,
                 "runtimes": [],
+                "waittimes": [],
             }
         )
 
@@ -146,10 +147,14 @@ class RedisResultsMonitor(CeleryResultsMonitor):
             elif status == "FAILURE":
                 stats_by_name[task_name]["failure"] += 1
             stats_by_name[task_name]["runtimes"].append(get_execution_time(task_data))
+            wait = get_wait_time(task_data)
+            if wait is not None:
+                stats_by_name[task_name]["waittimes"].append(wait)
 
         result = []
         for task_name, data in stats_by_name.items():
             runtimes = [r for r in data["runtimes"] if r]
+            waittimes = data["waittimes"]
             result.append(
                 TaskExecutionStats(
                     task_name=task_name,
@@ -159,6 +164,9 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                     avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
                     min_runtime=min(runtimes) if runtimes else None,
                     max_runtime=max(runtimes) if runtimes else None,
+                    avg_wait=sum(waittimes) / len(waittimes) if waittimes else None,
+                    min_wait=min(waittimes) if waittimes else None,
+                    max_wait=max(waittimes) if waittimes else None,
                 )
             )
 
@@ -209,6 +217,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                     date_started=get_timestamp(task_data, "date_started"),
                     date_done=get_timestamp(task_data, "date_done"),
                     execution_time=get_execution_time(task_data),
+                    queue_name=task_data.get("queue_name", "unknown"),
                 )
             )
 
@@ -231,6 +240,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
             task_name=task_data.get("task_name"),
             status=task_data.get("status"),
             worker=task_data.get("worker", "unknown"),
+            queue_name=task_data.get("queue_name", "unknown"),
             date_started=date_started.isoformat() if date_started else None,
             date_created=date_created.isoformat() if date_created else None,
             date_done=date_done.isoformat() if date_done else None,
@@ -294,6 +304,7 @@ class RedisResultsMonitor(CeleryResultsMonitor):
                 date_started=get_timestamp(task_data, "date_started"),
                 date_done=get_timestamp(task_data, "date_done"),
                 execution_time=get_execution_time(task_data),
+                queue_name=task_data.get("queue_name", "unknown"),
             )
             for task_data in pipeline.execute()
         ]
@@ -313,6 +324,19 @@ def get_execution_time(task_data: dict) -> float | None:
 
     with contextlib.suppress(ValueError, TypeError):
         elapsed = float(done) - float(started)
+        return elapsed if elapsed >= 0 else None
+
+    return None
+
+
+def get_wait_time(task_data: dict) -> float | None:
+    created = task_data.get("date_created")
+    started = task_data.get("date_started")
+    if not created or not started:
+        return None
+
+    with contextlib.suppress(ValueError, TypeError):
+        elapsed = float(started) - float(created)
         return elapsed if elapsed >= 0 else None
 
     return None

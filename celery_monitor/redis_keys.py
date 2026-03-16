@@ -4,3 +4,7 @@ REDIS_KEY_RECENT_TASKS = f"{REDIS_KEY_PREFIX}:tasks:recent"
 REDIS_KEY_STATUS_COUNTS = f"{REDIS_KEY_PREFIX}:status_counts"
 REDIS_KEY_TASKS_NAMES = f"{REDIS_KEY_PREFIX}:task_names"
 REDIS_KEY_WORKERS_NAMES = f"{REDIS_KEY_PREFIX}:workers"
+REDIS_KEY_QUEUE_LEN_BUCKET = "celery:monitor:queue:{queue_name}:{time_bucket}"
+REDIS_KEY_QUEUE_LEN_TASK_BUCKET = (
+    "celery:monitor:queue:{queue_name}:{task_name}:{time_bucket}"
+)

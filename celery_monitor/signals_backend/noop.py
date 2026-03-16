@@ -6,6 +6,11 @@ logger = logging.getLogger(__name__)
 
 
 class NoopSignalsResultBackend(SignalsResultBackend):
+    def task_published_handler(
+        self, sender=None, headers=None, body=None, routing_key=None, **kwargs
+    ):
+        pass
+
     def task_prerun_handler(
         self, sender=None, task_id=None, task=None, args=None, kwargs=None, **kw
     ):

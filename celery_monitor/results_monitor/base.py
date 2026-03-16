@@ -38,6 +38,7 @@ class CeleryResultsMonitor(ABC):
         self,
         status: str | None = None,
         task_name: str | None = None,
+        queue_name: str | None = None,
         worker: str | None = None,
         limit: int = 50,
     ) -> list[TaskOverview]: ...

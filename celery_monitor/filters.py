@@ -7,7 +7,7 @@ from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
 VALID_STATUSES = frozenset(
-    {"SUCCESS", "FAILURE", "STARTED", "PENDING", "RETRY", "REVOKED"}
+    {"SUCCESS", "FAILURE", "STARTED", "PENDING", "QUEUED", "RETRY", "REVOKED"}
 )
 
 
@@ -15,6 +15,7 @@ VALID_STATUSES = frozenset(
 class RecentTasksFilters:
     status: str | None = None
     task_name: str | None = None
+    queue_name: str | None = None
     worker: str | None = None
     limit: int = 50
 
@@ -26,6 +27,7 @@ class RecentTasksFilters:
         return cls(
             status=status,
             task_name=request.GET.get("task_name", "").strip() or None,
+            queue_name=request.GET.get("queue_name", "").strip() or None,
             worker=request.GET.get("worker", "").strip() or None,
         )
 
@@ -47,6 +49,9 @@ class TaskExecutionStatsFilters:
                 "avg_runtime",
                 "min_runtime",
                 "max_runtime",
+                "avg_wait",
+                "min_wait",
+                "max_wait",
             }
         ),
         repr=False,
@@ -83,6 +88,9 @@ class TaskExecutionStatsFilters:
                 "avg_runtime",
                 "min_runtime",
                 "max_runtime",
+                "avg_wait",
+                "min_wait",
+                "max_wait",
             }
         )
         sort_by = request.GET.get("sort", "total_count").strip()

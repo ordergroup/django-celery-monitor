@@ -15,6 +15,8 @@
                         {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
                 <option value="STARTED"
                         {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
+                <option value="QUEUED"
+                        {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
                 <option value="PENDING"
                         {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
                 <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
@@ -29,6 +31,16 @@
                 {% for name in task_names %}
                     <option value="{{ name }}"
                             {% if filters.task_name == name %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="queue_name">Queue:</label>
+            <select name="queue_name" id="queue_name">
+                <option value="">All</option>
+                {% for name in queue_names %}
+                    <option value="{{ name }}"
+                            {% if filters.queue_name == name %}selected{% endif %}>{{ name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -55,6 +67,7 @@
                 <th>Task ID</th>
                 <th>Task Name</th>
                 <th>Status</th>
+                <th>Queue</th>
                 <th>Worker</th>
                 <th>Started</th>
                 <th>Completed</th>
@@ -72,6 +85,7 @@
                     <td>
                         <span class="status-badge {{ task.status }}">{{ task.status }}</span>
                     </td>
+                    <td>{{ task.queue_name|default:"-" }}</td>
                     <td>{{ task.worker|default:"-" }}</td>
                     <td>{{ task.date_started|default:"-" }}</td>
                     <td>{{ task.date_done }}</td>
@@ -93,7 +107,7 @@
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="8" class="empty-row">No tasks found.</td>
+                    <td colspan="9" class="empty-row">No tasks found.</td>
                 </tr>
             {% endfor %}
         </tbody>

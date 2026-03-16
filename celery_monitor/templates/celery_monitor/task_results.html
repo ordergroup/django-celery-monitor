@@ -49,6 +49,8 @@
                                 {% if filters.status == "FAILURE" %}selected{% endif %}>FAILURE</option>
                         <option value="STARTED"
                                 {% if filters.status == "STARTED" %}selected{% endif %}>STARTED</option>
+                        <option value="QUEUED"
+                                {% if filters.status == "QUEUED" %}selected{% endif %}>QUEUED</option>
                         <option value="PENDING"
                                 {% if filters.status == "PENDING" %}selected{% endif %}>PENDING</option>
                         <option value="RETRY" {% if filters.status == "RETRY" %}selected{% endif %}>RETRY</option>
@@ -129,6 +131,7 @@ var fpTo = flatpickr('#date_to', {
                 <th>Task ID</th>
                 <th>Task Name</th>
                 <th>Status</th>
+                <th>Queue</th>
                 <th>Worker</th>
                 <th>Started</th>
                 <th>Completed</th>
@@ -146,6 +149,7 @@ var fpTo = flatpickr('#date_to', {
                     <td>
                         <span class="status-badge {{ task.status }}">{{ task.status }}</span>
                     </td>
+                    <td>{{ task.queue_name|default:"-" }}</td>
                     <td>{{ task.worker|default:"-" }}</td>
                     <td>{{ task.date_started|default:"-" }}</td>
                     <td>{{ task.date_done|default:"-" }}</td>
@@ -167,7 +171,7 @@ var fpTo = flatpickr('#date_to', {
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="8" class="empty-row">No tasks found.</td>
+                    <td colspan="9" class="empty-row">No tasks found.</td>
                 </tr>
             {% endfor %}
         </tbody>

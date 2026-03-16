@@ -163,6 +163,39 @@ function clearHoursParam() {
                             {% endif %}
                         </a>
                     </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=min_wait&order={% if filters.sort_by == 'min_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Min Wait
+                            {% if filters.sort_by == 'min_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=avg_wait&order={% if filters.sort_by == 'avg_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Avg Wait
+                            {% if filters.sort_by == 'avg_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?{% if filters.date_from and filters.date_to %}date_from={{ filters.date_from }}&date_to={{ filters.date_to }}{% else %}hours={{ filters.hours_param }}{% endif %}&sort=max_wait&order={% if filters.sort_by == 'max_wait' and filters.sort_order == 'asc' %}desc{% else %}asc{% endif %}">Max Wait
+                            {% if filters.sort_by == 'max_wait' %}
+                                {% if filters.sort_order == 'asc' %}
+                                    ▲
+                                {% else %}
+                                    ▼
+                                {% endif %}
+                            {% endif %}
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -213,6 +246,51 @@ function clearHoursParam() {
                                     {% widthratio stat.max_runtime 60 1 %}m {% widthratio stat.max_runtime 1 1 %}s
                                 {% else %}
                                     {% widthratio stat.max_runtime 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.min_wait is not None %}
+                                {% if stat.min_wait < 1 %}
+                                    {{ stat.min_wait|floatformat:2 }}s
+                                {% elif stat.min_wait < 60 %}
+                                    {{ stat.min_wait|floatformat:1 }}s
+                                {% elif stat.min_wait < 3600 %}
+                                    {% widthratio stat.min_wait 60 1 %}m {% widthratio stat.min_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.min_wait 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.avg_wait %}
+                                {% if stat.avg_wait < 1 %}
+                                    {{ stat.avg_wait|floatformat:2 }}s
+                                {% elif stat.avg_wait < 60 %}
+                                    {{ stat.avg_wait|floatformat:1 }}s
+                                {% elif stat.avg_wait < 3600 %}
+                                    {% widthratio stat.avg_wait 60 1 %}m {% widthratio stat.avg_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.avg_wait 3600 1 %}h
+                                {% endif %}
+                            {% else %}
+                                <span class="no-data">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="runtime">
+                            {% if stat.max_wait %}
+                                {% if stat.max_wait < 1 %}
+                                    {{ stat.max_wait|floatformat:2 }}s
+                                {% elif stat.max_wait < 60 %}
+                                    {{ stat.max_wait|floatformat:1 }}s
+                                {% elif stat.max_wait < 3600 %}
+                                    {% widthratio stat.max_wait 60 1 %}m {% widthratio stat.max_wait 1 1 %}s
+                                {% else %}
+                                    {% widthratio stat.max_wait 3600 1 %}h
                                 {% endif %}
                             {% else %}
                                 <span class="no-data">—</span>

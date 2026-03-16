@@ -108,8 +108,8 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                     date_to = timezone.make_aware(date_to)
                 queryset = queryset.filter(date_done__lte=date_to)
 
-            runtime_fields = {"avg_runtime", "min_runtime", "max_runtime"}
-            if sort_by in runtime_fields:
+            nullable_fields = {"avg_runtime", "min_runtime", "max_runtime", "avg_wait", "min_wait", "max_wait"}
+            if sort_by in nullable_fields:
                 if sort_order == "desc":
                     order_expr = F(sort_by).desc(nulls_last=True)
                 else:
@@ -147,6 +147,27 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                             date_done__isnull=False,
                         ),
                     ),
+                    avg_wait=Avg(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
+                    min_wait=Min(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
+                    max_wait=Max(
+                        F("date_started") - F("date_created"),
+                        filter=Q(
+                            date_started__isnull=False,
+                            date_created__isnull=False,
+                        ),
+                    ),
                 )
                 .order_by(order_expr)
             )
@@ -165,6 +186,18 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                 if stat["max_runtime"]:
                     max_seconds = stat["max_runtime"].total_seconds()
 
+                avg_wait_seconds = None
+                if stat["avg_wait"]:
+                    avg_wait_seconds = stat["avg_wait"].total_seconds()
+
+                min_wait_seconds = None
+                if stat["min_wait"]:
+                    min_wait_seconds = stat["min_wait"].total_seconds()
+
+                max_wait_seconds = None
+                if stat["max_wait"]:
+                    max_wait_seconds = stat["max_wait"].total_seconds()
+
                 result.append(
                     TaskExecutionStats(
                         task_name=stat["task_name"],
@@ -174,6 +207,9 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                         avg_runtime=avg_seconds,
                         min_runtime=min_seconds,
                         max_runtime=max_seconds,
+                        avg_wait=avg_wait_seconds,
+                        min_wait=min_wait_seconds,
+                        max_wait=max_wait_seconds,
                     )
                 )
 
@@ -223,6 +259,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                         date_started=task.date_started,
                         date_done=task.date_done,
                         execution_time=execution_time,
+                        queue_name="unknown",  # TODO: we probably need a signals similar to redis to get the queue_name
                     )
                 )
 
@@ -253,6 +290,7 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
                 periodic_task_name=None,
                 exception=None,
                 exception_type=None,
+                queue_name="unknown",  # TODO: we probably need a signals similar to redis to get the queue_name
             )
 
         except TaskResult.DoesNotExist:

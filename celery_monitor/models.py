@@ -59,6 +59,9 @@ class TaskExecutionStats:
     avg_runtime: float | None
     min_runtime: float | None
     max_runtime: float | None
+    avg_wait: float | None = None
+    min_wait: float | None = None
+    max_wait: float | None = None
 
 
 @dataclass
@@ -77,6 +80,7 @@ class TaskOverview:
     date_started: datetime | None
     date_done: datetime | None
     execution_time: float | None
+    queue_name: str | None
 
 
 @dataclass
@@ -102,3 +106,4 @@ class TaskDetail:
     meta: Any | None
     exception_type: str | None
     exception: str | None
+    queue_name: str | None
