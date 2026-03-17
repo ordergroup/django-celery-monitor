@@ -79,8 +79,8 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         if worker == "unknown":
             worker = kw.get("hostname", "unknown")
 
-        task_args_str = json.dumps(args) if args else None
-        task_kwargs_str = json.dumps(kwargs) if kwargs else None
+        task_args_str = json.dumps(args, default=str) if args else None
+        task_kwargs_str = json.dumps(kwargs, default=str) if kwargs else None
 
         update_data = {
             "status": "STARTED",
