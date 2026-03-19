@@ -40,7 +40,7 @@ class TestCeleryResultsMonitor:
         assert isinstance(result, list)
         assert result == []
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_worker_stats_with_online_workers(self, mock_app):
         """Test get_worker_stats with online workers."""
         mock_inspect = Mock()
@@ -90,7 +90,7 @@ class TestCeleryResultsMonitor:
         assert result[1].reserved_tasks == 0
         assert result[1].queues == ["celery"]
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_worker_stats_no_workers(self, mock_app):
         """Test get_worker_stats with no workers."""
         mock_inspect = Mock()
@@ -105,7 +105,7 @@ class TestCeleryResultsMonitor:
 
         assert result == []
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_worker_stats_exception_handling(self, mock_app):
         """Test get_worker_stats handles exceptions gracefully."""
         mock_app.control.inspect.side_effect = Exception("Connection error")
@@ -186,9 +186,10 @@ class TestCeleryResultsMonitor:
 
         assert result == []
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_task_detail_found_in_reserved(self, mock_app):
         mock_inspect = Mock()
+        mock_inspect.ping.return_value = {"worker1@host": {"ok": "pong"}}
         mock_inspect.reserved.return_value = {
             "worker1@host": [
                 {
@@ -211,9 +212,10 @@ class TestCeleryResultsMonitor:
         assert result.status == "RESERVED"
         assert result.worker == "worker1@host"
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_task_detail_not_found_returns_none(self, mock_app):
         mock_inspect = Mock()
+        mock_inspect.ping.return_value = {"worker1@host": {"ok": "pong"}}
         mock_inspect.reserved.return_value = {}
         mock_app.control.inspect.return_value = mock_inspect
 
@@ -222,7 +224,7 @@ class TestCeleryResultsMonitor:
 
         assert result is None
 
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_task_detail_exception_returns_none(self, mock_app):
         mock_app.control.inspect.side_effect = Exception("Connection error")
 

@@ -32,6 +32,38 @@ def patch_admin_site(site):
                 name="celery_monitor_statuses_last_hour_count",
             ),
             path(
+                "celery-monitor/actions/clear-computed-stats",
+                site.admin_view(lambda req: views.clear_computed_stats_view(req, site)),
+                name="celery_monitor_clear_computed_stats",
+            ),
+            path(
+                "celery-monitor/actions/compute-stats",
+                site.admin_view(lambda req: views.compute_stats_view(req, site)),
+                name="celery_monitor_compute_stats",
+            ),
+            path(
+                "celery-monitor/actions/clear-results",
+                site.admin_view(lambda req: views.clear_results_view(req, site)),
+                name="celery_monitor_clear_results",
+            ),
+            path(
+                "celery-monitor/actions/clear-all",
+                site.admin_view(lambda req: views.clear_all_view(req, site)),
+                name="celery_monitor_clear_all",
+            ),
+            path(
+                "celery-monitor/actions/prune-stale-recent-tasks",
+                site.admin_view(
+                    lambda req: views.prune_stale_recent_tasks_view(req, site)
+                ),
+                name="celery_monitor_prune_stale_recent_tasks",
+            ),
+            path(
+                "celery-monitor/redis-memory-stats",
+                site.admin_view(views.redis_memory_stats_view),
+                name="celery_monitor_redis_memory_stats",
+            ),
+            path(
                 "celery-monitor/redis-queue-stats",
                 site.admin_view(views.redis_queue_stats_view),
                 name="celery_monitor_redis_queue_stats",

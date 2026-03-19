@@ -7,12 +7,17 @@ from celery_monitor.signals_backend.base import safe_signal_handler
 from celery_monitor.signals_backend.noop import NoopSignalsResultBackend
 
 try:
-    import fakeredis as _fakeredis
+    import json
 
+    import fakeredis as _fakeredis
+    import lz4.frame as _lz4
+
+    from celery_monitor.enums import TaskField
     from celery_monitor.redis_keys import (
         REDIS_KEY_RECENT_TASKS,
         REDIS_KEY_STATUS_COUNTS,
         REDIS_KEY_TASK_DETAILS,
+        REDIS_KEY_TASK_PAYLOAD,
         REDIS_KEY_TASKS_NAMES,
         REDIS_KEY_WORKERS_NAMES,
     )
@@ -93,18 +98,33 @@ class TestNoopSignalsResultBackend:
 @pytest.mark.skipif(not HAS_REDIS, reason="redis not installed")
 class TestRedisSignalsResultBackend:
     @pytest.fixture
-    def fake_redis(self):
-        return _fakeredis.FakeRedis(decode_responses=True)
+    def fake_redis_server(self):
+        return _fakeredis.FakeServer()
 
     @pytest.fixture
-    def backend(self, fake_redis):
+    def fake_redis(self, fake_redis_server):
+        return _fakeredis.FakeRedis(server=fake_redis_server, decode_responses=True)
+
+    @pytest.fixture
+    def fake_redis_bytes(self, fake_redis_server):
+        return _fakeredis.FakeRedis(server=fake_redis_server, decode_responses=False)
+
+    @pytest.fixture
+    def backend(self, fake_redis, fake_redis_bytes):
         from celery import Celery
 
         app = Mock(spec=Celery)
         app.conf.result_backend = "redis://localhost:6379/0"
         app.conf.broker_url = "redis://localhost:6379/0"
-        with patch.object(
-            RedisSignalsResultBackend, "_get_redis_client", return_value=fake_redis
+        with (
+            patch.object(
+                RedisSignalsResultBackend, "_get_redis_client", return_value=fake_redis
+            ),
+            patch.object(
+                RedisSignalsResultBackend,
+                "_get_bytes_redis_client",
+                return_value=fake_redis_bytes,
+            ),
         ):
             return RedisSignalsResultBackend(app)
 
@@ -123,11 +143,13 @@ class TestRedisSignalsResultBackend:
         )
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["task_id"] == "t1"
-        assert data["task_name"] == "tasks.add"
-        assert data["queue_name"] == "high_priority"
-        assert data["status"] == "QUEUED"
-        assert "date_created" in data
+        assert (
+            "task_id" not in data
+        )  # task_id is the key suffix, not stored in the hash
+        assert data[TaskField.TASK_NAME] == "tasks.add"
+        assert data[TaskField.QUEUE_NAME] == "high_priority"
+        assert data[TaskField.STATUS] == "QUEUED"
+        assert TaskField.DATE_CREATED in data
 
     def test_task_published_handler_adds_to_recent_tasks(self, backend, fake_redis):
         backend.task_published_handler(
@@ -175,18 +197,17 @@ class TestRedisSignalsResultBackend:
         assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "QUEUED") == "0"
         assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "STARTED") == "1"
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["task_id"] == "t1"
-        assert data["status"] == "STARTED"
+        assert data[TaskField.STATUS] == "STARTED"
 
     def test_task_prerun_handler_stores_task_data(self, backend, fake_redis):
         task = self._make_task()
         backend.task_prerun_handler(task_id="t1", task=task, args=[1, 2], kwargs={})
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["task_name"] == "tasks.add"
-        assert data["status"] == "STARTED"
-        assert data["worker"] == "worker1@host"
-        assert "date_started" in data
+        assert data[TaskField.TASK_NAME] == "tasks.add"
+        assert data[TaskField.STATUS] == "STARTED"
+        assert data[TaskField.WORKER] == "worker1@host"
+        assert TaskField.DATE_STARTED in data
 
     def test_task_prerun_handler_adds_to_recent_tasks(self, backend, fake_redis):
         task = self._make_task()
@@ -209,15 +230,25 @@ class TestRedisSignalsResultBackend:
 
         assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "STARTED") == "1"
 
-    def test_task_prerun_handler_stores_args(self, backend, fake_redis):
+    def test_task_postrun_handler_stores_args(
+        self, backend, fake_redis, fake_redis_bytes
+    ):
         task = self._make_task()
-        backend.task_prerun_handler(
-            task_id="t1", task=task, args=[1, 2], kwargs={"key": "val"}
+        backend.task_postrun_handler(
+            task_id="t1",
+            task=task,
+            args=[1, 2],
+            kwargs={"key": "val"},
+            state="SUCCESS",
+            retval=42,
         )
 
-        data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert "task_args" in data
-        assert "task_kwargs" in data
+        raw = fake_redis_bytes.get(REDIS_KEY_TASK_PAYLOAD.format(task_id="t1"))
+        assert raw is not None
+        result_data = json.loads(_lz4.decompress(raw))
+        assert result_data[TaskField.TASK_ARGS] == "[1, 2]"
+        assert result_data[TaskField.TASK_KWARGS] == '{"key": "val"}'
+        assert result_data[TaskField.RESULT] == "42"
 
     def test_task_prerun_handler_uses_hostname_fallback(self, backend, fake_redis):
         task = Mock()
@@ -229,12 +260,14 @@ class TestRedisSignalsResultBackend:
         )
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["worker"] == "fallback@host"
+        assert data[TaskField.WORKER] == "fallback@host"
 
-    def test_task_postrun_handler_updates_status(self, backend, fake_redis):
+    def test_task_postrun_handler_updates_status(
+        self, backend, fake_redis, fake_redis_bytes
+    ):
         fake_redis.hset(
             REDIS_KEY_TASK_DETAILS.format(task_id="t1"),
-            mapping={"task_id": "t1", "status": "STARTED"},
+            mapping={TaskField.STATUS: "STARTED"},
         )
         fake_redis.hincrby(REDIS_KEY_STATUS_COUNTS, "STARTED", 1)
 
@@ -244,14 +277,15 @@ class TestRedisSignalsResultBackend:
         )
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["status"] == "SUCCESS"
-        assert "date_done" in data
-        assert data.get("result") == "42"
+        assert data[TaskField.STATUS] == "SUCCESS"
+        assert TaskField.DATE_DONE in data
+        raw = fake_redis_bytes.get(REDIS_KEY_TASK_PAYLOAD.format(task_id="t1"))
+        assert json.loads(_lz4.decompress(raw))[TaskField.RESULT] == "42"
 
     def test_task_postrun_handler_adjusts_status_counts(self, backend, fake_redis):
         fake_redis.hset(
             REDIS_KEY_TASK_DETAILS.format(task_id="t1"),
-            mapping={"status": "STARTED"},
+            mapping={TaskField.STATUS: "STARTED"},
         )
         fake_redis.hincrby(REDIS_KEY_STATUS_COUNTS, "STARTED", 1)
 
@@ -264,11 +298,11 @@ class TestRedisSignalsResultBackend:
         assert fake_redis.hget(REDIS_KEY_STATUS_COUNTS, "SUCCESS") == "1"
 
     def test_task_postrun_handler_handles_non_serializable_retval(
-        self, backend, fake_redis
+        self, backend, fake_redis, fake_redis_bytes
     ):
         fake_redis.hset(
             REDIS_KEY_TASK_DETAILS.format(task_id="t1"),
-            mapping={"status": "STARTED"},
+            mapping={TaskField.STATUS: "STARTED"},
         )
 
         class Unserializable:
@@ -280,36 +314,43 @@ class TestRedisSignalsResultBackend:
             task_id="t1", task=task, state="SUCCESS", retval=Unserializable()
         )
 
-        data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert "result" in data
+        assert (
+            fake_redis_bytes.get(REDIS_KEY_TASK_PAYLOAD.format(task_id="t1"))
+            is not None
+        )
 
-    def test_task_failure_handler_stores_exception_info(self, backend, fake_redis):
+    def test_task_failure_handler_stores_exception_info(
+        self, backend, fake_redis, fake_redis_bytes
+    ):
         exc = ValueError("Something went wrong")
         backend.task_failure_handler(task_id="t1", exception=exc)
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["exception"] == "Something went wrong"
-        assert data["exception_type"] == "ValueError"
+        assert TaskField.EXCEPTION not in data  # exception lives in error key now
+        raw = fake_redis_bytes.get(REDIS_KEY_TASK_PAYLOAD.format(task_id="t1"))
+        error_data = json.loads(_lz4.decompress(raw))
+        assert error_data[TaskField.EXCEPTION] == "Something went wrong"
+        assert error_data[TaskField.EXCEPTION_TYPE] == "ValueError"
 
     def test_task_retry_handler_sets_retry_status(self, backend, fake_redis):
         backend.task_retry_handler(task_id="t1", reason="Retry limit")
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data.get("status") == "RETRY"
-        assert data.get("retry_reason") == "Retry limit"
-        assert data.get("retry_count") == "1"
+        assert data.get(TaskField.STATUS) == "RETRY"
+        assert data.get(TaskField.RETRY_REASON) == "Retry limit"
+        assert data.get(TaskField.RETRY_COUNT) == "1"
 
     def test_task_retry_handler_without_reason(self, backend, fake_redis):
         backend.task_retry_handler(task_id="t1", reason=None)
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data.get("status") == "RETRY"
-        assert "retry_reason" not in data
+        assert data.get(TaskField.STATUS) == "RETRY"
+        assert TaskField.RETRY_REASON not in data
 
     def test_task_revoked_handler_updates_status(self, backend, fake_redis):
         fake_redis.hset(
             REDIS_KEY_TASK_DETAILS.format(task_id="t1"),
-            mapping={"task_id": "t1", "status": "STARTED"},
+            mapping={TaskField.STATUS: "STARTED"},
         )
         fake_redis.hincrby(REDIS_KEY_STATUS_COUNTS, "STARTED", 1)
 
@@ -318,14 +359,14 @@ class TestRedisSignalsResultBackend:
         backend.task_revoked_handler(request=request, terminated=True)
 
         data = fake_redis.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id="t1"))
-        assert data["status"] == "REVOKED"
-        assert "date_done" in data
-        assert data["terminated"] == "True"
+        assert data[TaskField.STATUS] == "REVOKED"
+        assert TaskField.DATE_DONE in data
+        assert data[TaskField.TERMINATED] == "True"
 
     def test_task_revoked_handler_adjusts_status_counts(self, backend, fake_redis):
         fake_redis.hset(
             REDIS_KEY_TASK_DETAILS.format(task_id="t1"),
-            mapping={"status": "STARTED"},
+            mapping={TaskField.STATUS: "STARTED"},
         )
         fake_redis.hincrby(REDIS_KEY_STATUS_COUNTS, "STARTED", 1)
 

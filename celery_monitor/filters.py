@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from dateutil.tz import UTC
@@ -21,80 +21,42 @@ class RecentTasksFilters:
 
     @classmethod
     def from_request(cls, request: HttpRequest) -> "RecentTasksFilters":
-        status = request.GET.get("status", "").strip()
-        if status not in VALID_STATUSES:
-            status = None
         return cls(
-            status=status,
-            task_name=request.GET.get("task_name", "").strip() or None,
-            queue_name=request.GET.get("queue_name", "").strip() or None,
-            worker=request.GET.get("worker", "").strip() or None,
+            status=_parse_status(request),
+            task_name=_clean(request.GET.get("task_name", "")),
+            queue_name=_clean(request.GET.get("queue_name", "")),
+            worker=_clean(request.GET.get("worker", "")),
         )
 
 
 @dataclass
 class TaskExecutionStatsFilters:
+    VALID_SORTS: frozenset = frozenset(
+        {
+            "task_name",
+            "total_count",
+            "success_count",
+            "failure_count",
+            "avg_runtime",
+            "min_runtime",
+            "max_runtime",
+            "avg_wait",
+            "min_wait",
+            "max_wait",
+        }
+    )
+
     sort_by: str = "total_count"
     sort_order: str = "desc"
     date_from: datetime | None = None
     date_to: datetime | None = None
 
-    VALID_SORTS: frozenset = field(
-        default_factory=lambda: frozenset(
-            {
-                "task_name",
-                "total_count",
-                "success_count",
-                "failure_count",
-                "avg_runtime",
-                "min_runtime",
-                "max_runtime",
-                "avg_wait",
-                "min_wait",
-                "max_wait",
-            }
-        ),
-        repr=False,
-        compare=False,
-    )
-
     @classmethod
     def from_request(cls, request: HttpRequest) -> "TaskExecutionStatsFilters":
-        hours_param_raw = request.GET.get("hours", "1")
-        date_from, date_to = get_date_range(request)
+        date_from, date_to = _resolve_date_range(request, default_hours=1)
 
-        if not date_from and not date_to:
-            if hours_param_raw == "all":
-                date_from = None
-                date_to = None
-            else:
-                try:
-                    hours = int(hours_param_raw)
-                    if hours <= 0:
-                        hours = 1
-
-                    date_to = datetime.now(tz=UTC)
-                    date_from = date_to - timedelta(hours=hours)
-                except (ValueError, TypeError):
-                    date_from = None
-                    date_to = None
-
-        valid_sorts = frozenset(
-            {
-                "task_name",
-                "total_count",
-                "success_count",
-                "failure_count",
-                "avg_runtime",
-                "min_runtime",
-                "max_runtime",
-                "avg_wait",
-                "min_wait",
-                "max_wait",
-            }
-        )
         sort_by = request.GET.get("sort", "total_count").strip()
-        if not sort_by or sort_by not in valid_sorts:
+        if not sort_by or sort_by not in cls.VALID_SORTS:
             sort_by = "total_count"
 
         sort_order = request.GET.get("order", "desc").strip()
@@ -122,41 +84,15 @@ class TaskTypeDetailFilters:
 
     @classmethod
     def from_request(cls, request: HttpRequest) -> "TaskTypeDetailFilters":
-        hours_param_raw = request.GET.get("hours", "24")
-        date_from, date_to = get_date_range(request)
-
-        if not date_from and not date_to:
-            if hours_param_raw == "all":
-                date_from = None
-                date_to = None
-            else:
-                try:
-                    hours = int(hours_param_raw)
-                    if hours <= 0:
-                        hours = 24
-                    date_to = datetime.now(tz=UTC)
-                    date_from = date_to - timedelta(hours=hours)
-                except (ValueError, TypeError):
-                    date_from = None
-                    date_to = None
-
-        status = request.GET.get("status", "").strip() or None
-        if status not in VALID_STATUSES:
-            status = None
-
-        try:
-            page = max(0, int(request.GET.get("page", 0)))
-        except (ValueError, TypeError):
-            page = 0
-
+        date_from, date_to = _resolve_date_range(request, default_hours=24)
         return cls(
-            task_name=request.GET.get("task_name", "").strip(),
+            task_name=_clean(request.GET.get("task_name", "")) or "",
             date_from=date_from,
             date_to=date_to,
-            status=status,
-            worker=request.GET.get("worker", "").strip() or None,
-            page=page,
-            hours_param=hours_param_raw,
+            status=_parse_status(request),
+            worker=_clean(request.GET.get("worker", "")),
+            page=_parse_page(request),
+            hours_param=request.GET.get("hours", "24"),
         )
 
 
@@ -173,41 +109,15 @@ class QueueDetailFilters:
 
     @classmethod
     def from_request(cls, request: HttpRequest) -> "QueueDetailFilters":
-        hours_param_raw = request.GET.get("hours", "24")
-        date_from, date_to = get_date_range(request)
-
-        if not date_from and not date_to:
-            if hours_param_raw == "all":
-                date_from = None
-                date_to = None
-            else:
-                try:
-                    hours = int(hours_param_raw)
-                    if hours <= 0:
-                        hours = 24
-                    date_to = datetime.now(tz=UTC)
-                    date_from = date_to - timedelta(hours=hours)
-                except (ValueError, TypeError):
-                    date_from = None
-                    date_to = None
-
-        status = request.GET.get("status", "").strip() or None
-        if status not in VALID_STATUSES:
-            status = None
-
-        try:
-            page = max(0, int(request.GET.get("page", 0)))
-        except (ValueError, TypeError):
-            page = 0
-
+        date_from, date_to = _resolve_date_range(request, default_hours=24)
         return cls(
-            queue_name=request.GET.get("queue_name", "").strip(),
+            queue_name=_clean(request.GET.get("queue_name", "")) or "",
             date_from=date_from,
             date_to=date_to,
-            status=status,
-            worker=request.GET.get("worker", "").strip() or None,
-            page=page,
-            hours_param=hours_param_raw,
+            status=_parse_status(request),
+            worker=_clean(request.GET.get("worker", "")),
+            page=_parse_page(request),
+            hours_param=request.GET.get("hours", "24"),
         )
 
 
@@ -226,6 +136,7 @@ class WorkerStatsFilters:
 class TaskResultsFilters:
     status: str | None = None
     task_name: str | None = None
+    queue_name: str | None = None
     worker: str | None = None
     date_from: datetime | None = None
     date_to: datetime | None = None
@@ -235,23 +146,56 @@ class TaskResultsFilters:
     @classmethod
     def from_request(cls, request: HttpRequest) -> "TaskResultsFilters":
         date_from, date_to = get_date_range(request)
-        try:
-            page = max(0, int(request.GET.get("page", 0)))
-        except (ValueError, TypeError):
-            page = 0
-
-        status = request.GET.get("status", "").strip() or None
-        if status not in VALID_STATUSES:
-            status = None
-
         return cls(
-            status=status,
-            task_name=request.GET.get("task_name", "").strip() or None,
-            worker=request.GET.get("worker", "").strip() or None,
+            status=_parse_status(request),
+            task_name=_clean(request.GET.get("task_name", "")),
+            queue_name=_clean(request.GET.get("queue_name", "")),
+            worker=_clean(request.GET.get("worker", "")),
             date_from=date_from,
             date_to=date_to,
-            page=page,
+            page=_parse_page(request),
         )
+
+
+def _clean(value: str | None) -> str | None:
+    """Strip whitespace and treat empty string or literal 'None' as None."""
+    if not value:
+        return None
+    value = value.strip()
+    return None if value in ("", "None") else value
+
+
+def _parse_status(request: HttpRequest) -> str | None:
+    status = request.GET.get("status", "").strip() or None
+    return status if status in VALID_STATUSES else None
+
+
+def _parse_page(request: HttpRequest) -> int:
+    try:
+        return max(0, int(request.GET.get("page", 0)))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _resolve_date_range(
+    request: HttpRequest, default_hours: int
+) -> tuple[datetime | None, datetime | None]:
+    date_from, date_to = get_date_range(request)
+    if date_from or date_to:
+        return date_from, date_to
+
+    hours_param = request.GET.get("hours", str(default_hours))
+    if hours_param == "all":
+        return None, None
+
+    try:
+        hours = int(hours_param)
+        if hours <= 0:
+            hours = default_hours
+        date_to = datetime.now(tz=UTC)
+        return date_to - timedelta(hours=hours), date_to
+    except (ValueError, TypeError):
+        return None, None
 
 
 def get_date_range(request: HttpRequest) -> tuple[datetime | None, datetime | None]:

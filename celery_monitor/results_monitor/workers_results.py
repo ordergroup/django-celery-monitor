@@ -11,9 +11,11 @@ from celery_monitor.models import (
     TaskOverview,
     TasksPage,
     TaskTypeTimeSeries,
+    ThroughputBucket,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
+from celery_monitor.utils import create_active_targeted_inspect
 
 logger = logging.getLogger("celery_monitor")
 
@@ -34,20 +36,18 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         self, include_offline: bool | None = None
     ) -> list[WorkerStats]:
         try:
-            inspect = current_app.control.inspect(timeout=0.5)
-
-            # Get online workers using ping
-            ping_response = inspect.ping()
-            online_worker_names = set(ping_response.keys()) if ping_response else set()
+            inspect, online_worker_names = create_active_targeted_inspect()
+            if not inspect:
+                return []
 
             # Get active tasks - this shows currently executing tasks
-            active_workers = inspect.active()
+            active_workers = inspect.active() or {}
 
             # Get reserved (prefetched but not yet started) tasks
-            reserved_workers = inspect.reserved()
+            reserved_workers = inspect.reserved() or {}
 
             # Get active queues for each worker
-            active_queues = inspect.active_queues()
+            active_queues = inspect.active_queues() or {}
 
             workers = []
             seen_workers = set()
@@ -113,7 +113,10 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
 
     def get_task_detail(self, task_id: str) -> TaskDetail | None:
         try:
-            inspect = current_app.control.inspect(timeout=1.0)
+            inspect, _ = create_active_targeted_inspect()
+            if not inspect:
+                return None
+
             reserved = inspect.reserved() or {}
             for worker_name, tasks in reserved.items():
                 for t in tasks:
@@ -187,8 +190,8 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         task_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        return [], []
+    ) -> list[ThroughputBucket]:
+        return []
 
     def get_queue_time_series(
         self,
@@ -203,8 +206,8 @@ class WorkersCeleryResultsMonitor(CeleryResultsMonitor):
         queue_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        return [], []
+    ) -> list[ThroughputBucket]:
+        return []
 
     def get_tasks_names(self) -> list[str]:
         return []

@@ -128,10 +128,44 @@ CELERY_MONITOR_RESULTS_BACKEND = "redis"
 ```python
 # settings.py
 
-# Optional: Customize how long task data is kept in Redis (in seconds)
-# Default: 7 days (604800 seconds)
-DJANGO_CELERY_MONITOR_TASK_DATA_TTL = 7 * 24 * 60 * 60
+# How long raw task data (details, payloads) is kept in Redis.
+# Applies to: task detail hashes, task payload keys, recent tasks index entries.
+# Default: 7 days
+DJANGO_CELERY_MONITOR_TASK_DATA_TTL = 7 * 24 * 60 * 60  # seconds
+
+# How long pre-computed stats are kept in Redis.
+# Applies to: per-bucket stats, rollup stats, throughput buckets, and their indexes.
+# Default: 7 days
+DJANGO_CELERY_MONITOR_STATS_TTL = 7 * 24 * 60 * 60  # seconds
 ```
+
+**Periodic Stats Computation (Celery Beat):**
+
+The dashboard's task execution stats and throughput charts are powered by pre-computed data.
+To keep them up to date, schedule `calculate_celery_stats` in your Celery Beat config:
+
+```python
+# settings.py
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "celery-monitor-stats": {
+        "task": "celery_monitor.redis.tasks.calculate_celery_stats",
+        "schedule": crontab(minute="*/30"),  # every 30 minutes
+    },
+}
+```
+
+The task is incremental by default — it only processes tasks added since the last run.
+Pass `overwrite=True` to recompute everything from scratch:
+
+```python
+from celery_monitor.tasks import calculate_celery_stats
+
+calculate_celery_stats.delay(overwrite=True)
+```
+
+Or trigger it manually from the dashboard using the **Compute stats** button.
 
 ### Option 3: Base Monitor (No Additional Backend)
 

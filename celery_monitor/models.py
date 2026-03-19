@@ -100,9 +100,17 @@ class TaskTypeTimeSeries:
 
 
 @dataclass
+class ThroughputBucket:
+    bucket: datetime
+    queued_count: int
+    started_count: int
+
+
+@dataclass
 class TasksPage:
     tasks: list[TaskOverview]
     total: int
+    filter_skipped: bool = False
 
 
 @dataclass

@@ -9,11 +9,38 @@
     <script src="{% static 'celery_monitor/flatpickr_init.js' %}"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="{% static 'celery_monitor/flatpickr_date_range.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+    <script src="{% static 'celery_monitor/detail_selector.js' %}"></script>
 {% endblock %}
 {% block content %}
     {% if is_redis %}
-        <div class="info-box">Status, task name, and worker filtering are not available for the Redis backend.</div>
         <form class="filters filters--rows" method="get" id="filters-form">
+            <div class="filter-row">
+                <div class="filter-group task-type-selector">
+                    <label for="task_name">Task:</label>
+                    <select name="task_name" id="task_name">
+                        <option value="">All</option>
+                        {% for name in task_names %}
+                            <option value="{{ name }}"
+                                    {% if filters.task_name == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group task-type-selector">
+                    <label for="queue_name">Queue:</label>
+                    <select name="queue_name" id="queue_name">
+                        <option value="">All</option>
+                        {% for name in queue_names %}
+                            <option value="{{ name }}"
+                                    {% if filters.queue_name == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button type="submit">Apply</button>
+                    <a href="?">Clear</a>
+                </div>
+            </div>
             <div class="filter-row">
                 <div class="filter-group">
                     <label>From:</label>
@@ -31,12 +58,39 @@
                            placeholder="To"
                            value="{{ filters.date_to|date:"Y-m-d\\TH:i" }}">
                 </div>
-                <div class="filter-group">
-                    <button type="submit">Apply</button>
-                    <a href="?">Clear</a>
-                </div>
             </div>
         </form>
+        <script>
+(function() {
+    function initFilter(id, paramName, placeholder) {
+        new TomSelect('#' + id, {
+            maxOptions: null,
+            placeholder: placeholder,
+            onInitialize: function() {
+                var el = this.control_input;
+                el.setAttribute('autocomplete', 'off');
+                el.setAttribute('data-bwignore', 'true');
+                el.setAttribute('data-lpignore', 'true');
+                el.setAttribute('data-form-type', 'other');
+            },
+            score: function(search) {
+                var s = search.toLowerCase();
+                return function(item) {
+                    return (item.text || '').toLowerCase().indexOf(s) !== -1 ? 1 : 0;
+                };
+            },
+            onChange: function(value) {
+                var params = new URLSearchParams(window.location.search);
+                if (value) { params.set(paramName, value); } else { params.delete(paramName); }
+                params.delete('page');
+                window.location.href = window.location.pathname + '?' + params.toString();
+            },
+        });
+    }
+    initFilter('task_name', 'task_name', '-- all tasks --');
+    initFilter('queue_name', 'queue_name', '-- all queues --');
+}());
+        </script>
     {% else %}
         <form class="filters filters--rows" method="get" id="filters-form">
             <div class="filter-row">
@@ -58,13 +112,23 @@
                                 {% if filters.status == "REVOKED" %}selected{% endif %}>REVOKED</option>
                     </select>
                 </div>
-                <div class="filter-group">
+                <div class="filter-group task-type-selector">
                     <label for="task_name">Task:</label>
                     <select name="task_name" id="task_name">
                         <option value="">All</option>
                         {% for name in task_names %}
                             <option value="{{ name }}"
                                     {% if filters.task_name == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group task-type-selector">
+                    <label for="queue_name">Queue:</label>
+                    <select name="queue_name" id="queue_name">
+                        <option value="">All</option>
+                        {% for name in queue_names %}
+                            <option value="{{ name }}"
+                                    {% if filters.queue_name == name %}selected{% endif %}>{{ name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -102,15 +166,51 @@
             </div>
         </form>
         <script>
-document.getElementById('filters-form').addEventListener('change', function(e) {
-    if (e.target.tagName === 'SELECT') this.submit();
-});
+(function() {
+    function initFilter(id, paramName, placeholder) {
+        new TomSelect('#' + id, {
+            maxOptions: null,
+            placeholder: placeholder,
+            onInitialize: function() {
+                var el = this.control_input;
+                el.setAttribute('autocomplete', 'off');
+                el.setAttribute('data-bwignore', 'true');
+                el.setAttribute('data-lpignore', 'true');
+                el.setAttribute('data-form-type', 'other');
+            },
+            score: function(search) {
+                var s = search.toLowerCase();
+                return function(item) {
+                    return (item.text || '').toLowerCase().indexOf(s) !== -1 ? 1 : 0;
+                };
+            },
+            onChange: function(value) {
+                var params = new URLSearchParams(window.location.search);
+                if (value) { params.set(paramName, value); } else { params.delete(paramName); }
+                params.delete('page');
+                window.location.href = window.location.pathname + '?' + params.toString();
+            },
+        });
+    }
+    initFilter('task_name', 'task_name', '-- all tasks --');
+    initFilter('queue_name', 'queue_name', '-- all queues --');
+    document.getElementById('filters-form').addEventListener('change', function(e) {
+        if (e.target.tagName === 'SELECT' && e.target.id === 'status') this.submit();
+    });
+}());
         </script>
     {% endif %}
     <script>initFlatpickrDateRange();</script>
+    {% if filter_skipped %}
+        <div class="info-box info-box--warning">
+            Filtering by task name or queue is unavailable when there are more than 100,000 recent tasks. Showing unfiltered results.
+        </div>
+    {% endif %}
     <div class="table-meta">
         <span>{{ total }} task{{ total|pluralize }} total</span>
-        {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}
+        {% if total_pages > 1 %}
+            &mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}
+        {% endif %}
     </div>
     <table class="task-table">
         <thead>
@@ -166,14 +266,14 @@ document.getElementById('filters-form').addEventListener('change', function(e) {
     {% if total_pages > 1 %}
         <div class="pagination">
             {% if filters.page > 0 %}
-                <a href="?page=0&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">&laquo; First</a>
-                <a href="?page={{ filters.page|add:"-1" }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">&lsaquo; Prev</a>
+                <a href="?page=0&status={{ filters.status|default:"" }}&task_name={{ filters.task_name|default:"" }}&queue_name={{ filters.queue_name|default:"" }}&worker={{ filters.worker|default:"" }}&date_from={{ filters.date_from|default:"" }}&date_to={{ filters.date_to|default:"" }}">&laquo; First</a>
+                <a href="?page={{ filters.page|add:"-1" }}&status={{ filters.status|default:"" }}&task_name={{ filters.task_name|default:"" }}&queue_name={{ filters.queue_name|default:"" }}&worker={{ filters.worker|default:"" }}&date_from={{ filters.date_from|default:"" }}&date_to={{ filters.date_to|default:"" }}">&lsaquo; Prev</a>
             {% endif %}
             <span class="pagination-current">{{ filters.page|add:1 }} / {{ total_pages }}</span>
             {% if filters.page|add:1 < total_pages %}
-                <a href="?page={{ filters.page|add:"1" }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Next &rsaquo;</a>
+                <a href="?page={{ filters.page|add:"1" }}&status={{ filters.status|default:"" }}&task_name={{ filters.task_name|default:"" }}&queue_name={{ filters.queue_name|default:"" }}&worker={{ filters.worker|default:"" }}&date_from={{ filters.date_from|default:"" }}&date_to={{ filters.date_to|default:"" }}">Next &rsaquo;</a>
                 {% with last_page=total_pages|add:"-1" %}
-                    <a href="?page={{ last_page }}&status={{ filters.status }}&task_name={{ filters.task_name }}&worker={{ filters.worker }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Last &raquo;</a>
+                    <a href="?page={{ last_page }}&status={{ filters.status|default:"" }}&task_name={{ filters.task_name|default:"" }}&queue_name={{ filters.queue_name|default:"" }}&worker={{ filters.worker|default:"" }}&date_from={{ filters.date_from|default:"" }}&date_to={{ filters.date_to|default:"" }}">Last &raquo;</a>
                 {% endwith %}
             {% endif %}
         </div>

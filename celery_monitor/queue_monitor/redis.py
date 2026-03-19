@@ -3,26 +3,18 @@ import time
 from collections import defaultdict
 
 import redis
-from celery import current_app
 from redis import Redis
 
 from celery_monitor.models import QueueStats, QueueTaskTypeStats
 from celery_monitor.queue_monitor.base import QueueMonitor
-from celery_monitor.redis_keys import REDIS_KEY_QUEUE_LEN_STREAM
+from celery_monitor.redis.client import get_results_client
+from celery_monitor.redis.keys import REDIS_KEY_QUEUE_LEN_STREAM
 
 
 class RedisMonitor(QueueMonitor):
     def __init__(self):
         super().__init__()
         self.redis: Redis = redis.from_url(self.broker_url)
-
-    def _get_results_backend_connection(self) -> Redis:
-        redis_url = current_app.conf.result_backend or current_app.conf.broker_url
-        return redis.from_url(
-            redis_url,
-            decode_responses=True,
-            socket_connect_timeout=3,
-        )
 
     def get_queue_task_types(self) -> list[QueueTaskTypeStats]:
         stats = []
@@ -83,7 +75,7 @@ class RedisMonitor(QueueMonitor):
         start_ms = now_ms - 24 * 3600 * 1000
 
         try:
-            r = self._get_results_backend_connection()
+            r = get_results_client()
             pipeline = r.pipeline()
             for queue_name in queue_names:
                 stream_key = REDIS_KEY_QUEUE_LEN_STREAM.format(queue_name=queue_name)

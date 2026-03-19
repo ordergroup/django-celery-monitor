@@ -1,4 +1,10 @@
-<h2 class="section-title">Queue Length History (last 24h)</h2>
+<div class="queue-history-chart-header">
+    <h2 class="section-title">Queue Length History</h2>
+    <button id="queueHistoryResetZoom"
+            class="action-btn action-btn--neutral queue-history-reset-btn"
+            style="display: none"
+            onclick="resetQueueHistoryZoom()">Reset zoom</button>
+</div>
 <div class="queue-history-chart-wrap">
     <canvas id="queueHistoryChart"
             data-url="{% url 'admin:celery_monitor_redis_queue_history' %}"></canvas>

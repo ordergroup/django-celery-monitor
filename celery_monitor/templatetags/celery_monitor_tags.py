@@ -1,6 +1,13 @@
 from django import template
 
+from celery_monitor.utils import is_redis_backend
+
 register = template.Library()
+
+
+@register.simple_tag
+def is_redis():
+    return is_redis_backend()
 
 
 @register.filter

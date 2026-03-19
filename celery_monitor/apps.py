@@ -11,5 +11,6 @@ class CeleryMonitorConfig(AppConfig):
 
         from . import signals  # noqa
         from .admin import patch_admin_site
+        from .redis import tasks  # noqa
 
         patch_admin_site(admin.site)

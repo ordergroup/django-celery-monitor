@@ -22,20 +22,30 @@ from celery_monitor.redis.constants import SCAN_THRESHOLD
 from celery_monitor.redis.enums import TaskField
 from celery_monitor.redis.keys import (
     REDIS_KEY_RECENT_TASKS,
+    REDIS_KEY_STATS_QUEUE,
+    REDIS_KEY_STATS_QUEUE_INDEX,
+    REDIS_KEY_STATS_TASK,
+    REDIS_KEY_STATS_TASK_INDEX,
+    REDIS_KEY_STATS_TASK_ROLLUP,
     REDIS_KEY_STATUS_COUNTS,
     REDIS_KEY_TASK_DETAILS,
     REDIS_KEY_TASK_PAYLOAD,
     REDIS_KEY_TASKS_NAMES,
+    REDIS_KEY_THROUGHPUT_QUEUE,
+    REDIS_KEY_THROUGHPUT_QUEUE_INDEX,
+    REDIS_KEY_THROUGHPUT_TASK,
+    REDIS_KEY_THROUGHPUT_TASK_INDEX,
     REDIS_KEY_WORKERS_NAMES,
 )
-from celery_monitor.redis.utils import get_execution_time, get_timestamp, get_wait_time
+from celery_monitor.redis.utils import get_execution_time, get_timestamp
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
+from celery_monitor.utils import float_or
 
 logger = logging.getLogger("celery_monitor")
 
 
-class RedisResultsMonitor(CeleryResultsMonitor):
+class RedisComputedResultsMonitor(CeleryResultsMonitor):
     def __init__(self):
         super().__init__()
         self.client = get_results_client()
@@ -87,69 +97,139 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[TaskExecutionStats]:
-        start_time = date_from.timestamp() if date_from else float("-inf")
-        end_time = date_to.timestamp() if date_to else float("inf")
+        if date_from is None and date_to is None:
+            return self._get_task_execution_stats_from_rollup(sort_by, sort_order)
 
-        task_ids = self.client.zrangebyscore(
-            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        start_ts = date_from.timestamp() if date_from else float("-inf")
+        end_ts = date_to.timestamp() if date_to else float("inf")
+
+        members = self.client.zrangebyscore(
+            REDIS_KEY_STATS_TASK_INDEX, start_ts, end_ts
         )
-        if not task_ids:
+        if not members:
             return []
 
-        pipeline = self.client.pipeline()
-        for task_id in task_ids:
-            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+        # Parse "{name}:{bucket_ts}" — split on last ":" since task names may contain "."
+        parsed = [(m[: m.rfind(":")], int(m[m.rfind(":") + 1 :])) for m in members]
 
-        stats_by_name = defaultdict(
+        pipeline = self.client.pipeline()
+        for name, bucket_ts in parsed:
+            pipeline.hgetall(
+                REDIS_KEY_STATS_TASK.format(name=name, bucket_ts=bucket_ts)
+            )
+
+        agg: dict = defaultdict(
             lambda: {
                 "total": 0,
                 "success": 0,
                 "failure": 0,
-                "queued": 0,
-                "started": 0,
-                "runtimes": [],
-                "waittimes": [],
+                "sum_runtime": 0.0,
+                "runtime_count": 0,
+                "min_runtime": None,
+                "max_runtime": None,
+                "sum_wait": 0.0,
+                "wait_count": 0,
+                "min_wait": None,
+                "max_wait": None,
             }
         )
 
-        for task_data in pipeline.execute():
-            task_name = task_data.get(TaskField.TASK_NAME)
-            if not task_name:
+        for (name, _), data in zip(parsed, pipeline.execute(), strict=False):
+            if not data:
                 continue
+            a = agg[name]
+            a["total"] += int(data["count"])
+            a["success"] += int(data["success_count"])
+            a["failure"] += int(data["failure_count"])
 
-            stats_by_name[task_name]["total"] += 1
-            status = task_data.get(TaskField.STATUS)
-            if status == "SUCCESS":
-                stats_by_name[task_name]["success"] += 1
-            elif status == "FAILURE":
-                stats_by_name[task_name]["failure"] += 1
-            elif status in ("QUEUED", "PENDING"):
-                stats_by_name[task_name]["queued"] += 1
-            elif status == "STARTED":
-                stats_by_name[task_name]["started"] += 1
-            stats_by_name[task_name]["runtimes"].append(get_execution_time(task_data))
-            wait = get_wait_time(task_data)
-            if wait is not None:
-                stats_by_name[task_name]["waittimes"].append(wait)
+            runtime_count = int(data.get("runtime_count") or 0)
+            if runtime_count:
+                a["sum_runtime"] += float(data["sum_runtime"])
+                a["runtime_count"] += runtime_count
+                min_rt, max_rt = float(data["min_runtime"]), float(data["max_runtime"])
+                a["min_runtime"] = (
+                    min(a["min_runtime"], min_rt)
+                    if a["min_runtime"] is not None
+                    else min_rt
+                )
+                a["max_runtime"] = (
+                    max(a["max_runtime"], max_rt)
+                    if a["max_runtime"] is not None
+                    else max_rt
+                )
+
+            wait_count = int(data.get("wait_count") or 0)
+            if wait_count:
+                a["sum_wait"] += float(data["sum_wait"])
+                a["wait_count"] += wait_count
+                min_w, max_w = float(data["min_wait"]), float(data["max_wait"])
+                a["min_wait"] = (
+                    min(a["min_wait"], min_w) if a["min_wait"] is not None else min_w
+                )
+                a["max_wait"] = (
+                    max(a["max_wait"], max_w) if a["max_wait"] is not None else max_w
+                )
+
+        result = [
+            TaskExecutionStats(
+                task_name=name,
+                total_count=a["total"],
+                success_count=a["success"],
+                failure_count=a["failure"],
+                avg_runtime=a["sum_runtime"] / a["runtime_count"]
+                if a["runtime_count"]
+                else None,
+                min_runtime=a["min_runtime"],
+                max_runtime=a["max_runtime"],
+                avg_wait=a["sum_wait"] / a["wait_count"] if a["wait_count"] else None,
+                min_wait=a["min_wait"],
+                max_wait=a["max_wait"],
+            )
+            for name, a in agg.items()
+        ]
+
+        return sorted(
+            result,
+            key=lambda x: getattr(x, sort_by, None) or -1,
+            reverse=(sort_order == "desc"),
+        )
+
+    def _get_task_execution_stats_from_rollup(
+        self, sort_by: str, sort_order: str
+    ) -> list[TaskExecutionStats]:
+        task_names = self.client.smembers(REDIS_KEY_TASKS_NAMES)
+        if not task_names:
+            return []
+
+        pipeline = self.client.pipeline()
+        for name in task_names:
+            pipeline.hgetall(REDIS_KEY_STATS_TASK_ROLLUP.format(name=name))
 
         result = []
-        for task_name, data in stats_by_name.items():
-            runtimes = [r for r in data["runtimes"] if r]
-            waittimes = data["waittimes"]
+        for name, data in zip(task_names, pipeline.execute(), strict=False):
+            if not data:
+                continue
+            total = int(data.get("total_count") or 0)
+            if not total:
+                continue
+            runtime_count = int(data.get("runtime_count") or 0)
+            wait_count = int(data.get("wait_count") or 0)
             result.append(
                 TaskExecutionStats(
-                    task_name=task_name,
-                    total_count=data["total"],
-                    success_count=data["success"],
-                    failure_count=data["failure"],
-                    queued_count=data["queued"],
-                    started_count=data["started"],
-                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
-                    min_runtime=min(runtimes) if runtimes else None,
-                    max_runtime=max(runtimes) if runtimes else None,
-                    avg_wait=sum(waittimes) / len(waittimes) if waittimes else None,
-                    min_wait=min(waittimes) if waittimes else None,
-                    max_wait=max(waittimes) if waittimes else None,
+                    task_name=name,
+                    total_count=total,
+                    success_count=int(data.get("success_count") or 0),
+                    failure_count=int(data.get("failure_count") or 0),
+                    avg_runtime=float(data["sum_runtime"]) / runtime_count
+                    if runtime_count
+                    else None,
+                    min_runtime=float_or(data.get("min_runtime")),
+                    max_runtime=float_or(data.get("max_runtime")),
+                    avg_wait=float(data["sum_wait"]) / wait_count
+                    if wait_count
+                    else None,
+                    min_wait=float_or(data.get("min_wait")),
+                    max_wait=float_or(data.get("max_wait")),
                 )
             )
 
@@ -354,86 +434,24 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[TaskTypeTimeSeries]:
-        start_time = date_from.timestamp() if date_from else float("-inf")
-        end_time = date_to.timestamp() if date_to else float("inf")
-
-        # TODO: use a per-task index instead of scanning recent_tasks
-        task_ids = self.client.zrangebyscore(
-            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        bucket_timestamps = self._get_bucket_timestamps(
+            REDIS_KEY_STATS_TASK_INDEX, task_name, date_from, date_to
         )
-        if not task_ids:
+        if not bucket_timestamps:
             return []
 
         pipeline = self.client.pipeline()
-        for task_id in task_ids:
-            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+        for ts in bucket_timestamps:
+            pipeline.hgetall(REDIS_KEY_STATS_TASK.format(name=task_name, bucket_ts=ts))
 
-        if date_from and date_to:
-            range_hours = (date_to - date_from).total_seconds() / 3600
-        else:
-            range_hours = 24 * 30
-
-        if range_hours <= 48:
-            bucket_seconds = 5 * 60
-        elif range_hours <= 14 * 24:
-            bucket_seconds = 6 * 3600
-        else:
-            bucket_seconds = 24 * 3600
-
-        buckets: dict = defaultdict(
-            lambda: {
-                "count": 0,
-                "success": 0,
-                "failure": 0,
-                "runtimes": [],
-                "waits": [],
-            }
+        return sorted(
+            [
+                _hash_to_time_series(ts, data)
+                for ts, data in zip(bucket_timestamps, pipeline.execute(), strict=False)
+                if data
+            ],
+            key=lambda x: x.bucket,
         )
-
-        for task_data in pipeline.execute():
-            if task_data.get(TaskField.TASK_NAME) != task_name:
-                continue
-            done_ts = task_data.get(TaskField.DATE_DONE)
-            if not done_ts:
-                continue
-            try:
-                bucket_ts = int(float(done_ts) // bucket_seconds) * bucket_seconds
-            except (ValueError, TypeError):
-                continue
-
-            status = task_data.get(TaskField.STATUS)
-            buckets[bucket_ts]["count"] += 1
-            if status == "SUCCESS":
-                buckets[bucket_ts]["success"] += 1
-            elif status == "FAILURE":
-                buckets[bucket_ts]["failure"] += 1
-            runtime = get_execution_time(task_data)
-            if runtime is not None:
-                buckets[bucket_ts]["runtimes"].append(runtime)
-            wait = get_wait_time(task_data)
-            if wait is not None:
-                buckets[bucket_ts]["waits"].append(wait)
-
-        result = []
-        for bucket_ts in sorted(buckets.keys()):
-            data = buckets[bucket_ts]
-            runtimes = data["runtimes"]
-            waits = data["waits"]
-            result.append(
-                TaskTypeTimeSeries(
-                    bucket=datetime.fromtimestamp(bucket_ts, tz=dt_timezone.utc),
-                    count=data["count"],
-                    success_count=data["success"],
-                    failure_count=data["failure"],
-                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
-                    min_runtime=min(runtimes) if runtimes else None,
-                    max_runtime=max(runtimes) if runtimes else None,
-                    avg_wait=sum(waits) / len(waits) if waits else None,
-                    min_wait=min(waits) if waits else None,
-                    max_wait=max(waits) if waits else None,
-                )
-            )
-        return result
 
     def get_throughput_time_series(
         self,
@@ -441,7 +459,30 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[ThroughputBucket]:
-        return []
+        bucket_timestamps = self._get_bucket_timestamps(
+            REDIS_KEY_THROUGHPUT_TASK_INDEX, task_name, date_from, date_to
+        )
+        if not bucket_timestamps:
+            return []
+
+        pipeline = self.client.pipeline()
+        for ts in bucket_timestamps:
+            pipeline.hgetall(
+                REDIS_KEY_THROUGHPUT_TASK.format(name=task_name, bucket_ts=ts)
+            )
+
+        return sorted(
+            [
+                ThroughputBucket(
+                    bucket=datetime.fromtimestamp(ts, tz=dt_timezone.utc),
+                    queued_count=int(data.get("queued_count", 0)),
+                    started_count=int(data.get("started_count", 0)),
+                )
+                for ts, data in zip(bucket_timestamps, pipeline.execute(), strict=False)
+                if data
+            ],
+            key=lambda x: x.bucket,
+        )
 
     def get_queue_time_series(
         self,
@@ -449,86 +490,39 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[TaskTypeTimeSeries]:
-        start_time = date_from.timestamp() if date_from else float("-inf")
-        end_time = date_to.timestamp() if date_to else float("inf")
-
-        # TODO: use a per-queue index instead of scanning recent_tasks
-        task_ids = self.client.zrangebyscore(
-            REDIS_KEY_RECENT_TASKS, start_time, end_time
+        bucket_timestamps = self._get_bucket_timestamps(
+            REDIS_KEY_STATS_QUEUE_INDEX, queue_name, date_from, date_to
         )
-        if not task_ids:
+        if not bucket_timestamps:
             return []
 
         pipeline = self.client.pipeline()
-        for task_id in task_ids:
-            pipeline.hgetall(REDIS_KEY_TASK_DETAILS.format(task_id=task_id))
+        for ts in bucket_timestamps:
+            pipeline.hgetall(
+                REDIS_KEY_STATS_QUEUE.format(name=queue_name, bucket_ts=ts)
+            )
 
-        if date_from and date_to:
-            range_hours = (date_to - date_from).total_seconds() / 3600
-        else:
-            range_hours = 24 * 30
-
-        if range_hours <= 48:
-            bucket_seconds = 5 * 60
-        elif range_hours <= 14 * 24:
-            bucket_seconds = 6 * 3600
-        else:
-            bucket_seconds = 24 * 3600
-
-        buckets: dict = defaultdict(
-            lambda: {
-                "count": 0,
-                "success": 0,
-                "failure": 0,
-                "runtimes": [],
-                "waits": [],
-            }
+        return sorted(
+            [
+                _hash_to_time_series(ts, data)
+                for ts, data in zip(bucket_timestamps, pipeline.execute(), strict=False)
+                if data
+            ],
+            key=lambda x: x.bucket,
         )
 
-        for task_data in pipeline.execute():
-            if task_data.get(TaskField.QUEUE_NAME) != queue_name:
-                continue
-            done_ts = task_data.get(TaskField.DATE_DONE)
-            if not done_ts:
-                continue
-            try:
-                bucket_ts = int(float(done_ts) // bucket_seconds) * bucket_seconds
-            except (ValueError, TypeError):
-                continue
-
-            status = task_data.get(TaskField.STATUS)
-            buckets[bucket_ts]["count"] += 1
-            if status == "SUCCESS":
-                buckets[bucket_ts]["success"] += 1
-            elif status == "FAILURE":
-                buckets[bucket_ts]["failure"] += 1
-            runtime = get_execution_time(task_data)
-            if runtime is not None:
-                buckets[bucket_ts]["runtimes"].append(runtime)
-            wait = get_wait_time(task_data)
-            if wait is not None:
-                buckets[bucket_ts]["waits"].append(wait)
-
-        result = []
-        for bucket_ts in sorted(buckets.keys()):
-            data = buckets[bucket_ts]
-            runtimes = data["runtimes"]
-            waits = data["waits"]
-            result.append(
-                TaskTypeTimeSeries(
-                    bucket=datetime.fromtimestamp(bucket_ts, tz=dt_timezone.utc),
-                    count=data["count"],
-                    success_count=data["success"],
-                    failure_count=data["failure"],
-                    avg_runtime=sum(runtimes) / len(runtimes) if runtimes else None,
-                    min_runtime=min(runtimes) if runtimes else None,
-                    max_runtime=max(runtimes) if runtimes else None,
-                    avg_wait=sum(waits) / len(waits) if waits else None,
-                    min_wait=min(waits) if waits else None,
-                    max_wait=max(waits) if waits else None,
-                )
-            )
-        return result
+    def _get_bucket_timestamps(
+        self,
+        index_key: str,
+        name: str,
+        date_from: datetime | None,
+        date_to: datetime | None,
+    ) -> list[int]:
+        start_ts = date_from.timestamp() if date_from else float("-inf")
+        end_ts = date_to.timestamp() if date_to else float("inf")
+        members = self.client.zrangebyscore(index_key, start_ts, end_ts)
+        prefix = f"{name}:"
+        return [int(m[len(prefix) :]) for m in members if m.startswith(prefix)]
 
     def get_queue_throughput_time_series(
         self,
@@ -536,10 +530,48 @@ class RedisResultsMonitor(CeleryResultsMonitor):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[ThroughputBucket]:
-        return []
+        bucket_timestamps = self._get_bucket_timestamps(
+            REDIS_KEY_THROUGHPUT_QUEUE_INDEX, queue_name, date_from, date_to
+        )
+        if not bucket_timestamps:
+            return []
+
+        pipeline = self.client.pipeline()
+        for ts in bucket_timestamps:
+            pipeline.hgetall(
+                REDIS_KEY_THROUGHPUT_QUEUE.format(name=queue_name, bucket_ts=ts)
+            )
+
+        return sorted(
+            [
+                ThroughputBucket(
+                    bucket=datetime.fromtimestamp(ts, tz=dt_timezone.utc),
+                    queued_count=int(data.get("queued_count", 0)),
+                    started_count=int(data.get("started_count", 0)),
+                )
+                for ts, data in zip(bucket_timestamps, pipeline.execute(), strict=False)
+                if data
+            ],
+            key=lambda x: x.bucket,
+        )
 
     def get_tasks_names(self) -> list[str]:
         return sorted(self.client.smembers(REDIS_KEY_TASKS_NAMES))
 
     def get_workers_names(self) -> list[str]:
         return sorted(self.client.smembers(REDIS_KEY_WORKERS_NAMES))
+
+
+def _hash_to_time_series(bucket_ts: int, data: dict) -> TaskTypeTimeSeries:
+    return TaskTypeTimeSeries(
+        bucket=datetime.fromtimestamp(bucket_ts, tz=dt_timezone.utc),
+        count=int(data["count"]),
+        success_count=int(data["success_count"]),
+        failure_count=int(data["failure_count"]),
+        avg_runtime=float_or(data.get("avg_runtime")),
+        min_runtime=float_or(data.get("min_runtime")),
+        max_runtime=float_or(data.get("max_runtime")),
+        avg_wait=float_or(data.get("avg_wait")),
+        min_wait=float_or(data.get("min_wait")),
+        max_wait=float_or(data.get("max_wait")),
+    )

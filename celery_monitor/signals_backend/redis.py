@@ -2,18 +2,22 @@ import contextlib
 import json
 import logging
 from datetime import timedelta
+from typing import Any
 
+import lz4.frame
 from celery import Celery
 from django.conf import settings
 from django.utils import timezone
 from redis.client import Pipeline
 
-from celery_monitor.redis_keys import (
+from celery_monitor.redis.enums import TaskField
+from celery_monitor.redis.keys import (
     REDIS_KEY_QUEUE_LEN_SAMPLE_LOCK,
     REDIS_KEY_QUEUE_LEN_STREAM,
     REDIS_KEY_RECENT_TASKS,
     REDIS_KEY_STATUS_COUNTS,
     REDIS_KEY_TASK_DETAILS,
+    REDIS_KEY_TASK_PAYLOAD,
     REDIS_KEY_TASKS_NAMES,
     REDIS_KEY_WORKERS_NAMES,
 )
@@ -32,6 +36,7 @@ class RedisSignalsResultBackend(SignalsResultBackend):
             settings, "DJANGO_CELERY_MONITOR_QUEUE_HISTORY_MAXLEN", 50000
         )
         self.redis_client = self._get_redis_client()
+        self.bytes_client = self._get_bytes_redis_client()
         self.broker_redis_client = self._get_broker_redis_client()
 
     def task_published_handler(
@@ -44,23 +49,22 @@ class RedisSignalsResultBackend(SignalsResultBackend):
 
         task_name = sender or (headers or {}).get("task")
         task_data = {
-            "task_id": task_id,
-            "task_name": task_name,
-            "queue_name": routing_key,
-            "status": "QUEUED",
-            "date_created": str(now.timestamp()),
+            TaskField.TASK_NAME: task_name,
+            TaskField.QUEUE_NAME: routing_key,
+            TaskField.STATUS: "QUEUED",
+            TaskField.DATE_CREATED: str(now.timestamp()),
         }
 
         pipeline = self.redis_client.pipeline()
         pipeline.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=task_data)
         pipeline.zadd(REDIS_KEY_RECENT_TASKS, {task_id: now.timestamp()})
+        cutoff = now - timedelta(seconds=self.task_data_ttl)
         if task_name:
             pipeline.sadd(REDIS_KEY_TASKS_NAMES, task_name)
         pipeline.hincrby(REDIS_KEY_STATUS_COUNTS, "QUEUED", 1)
         pipeline.expire(
             REDIS_KEY_TASK_DETAILS.format(task_id=task_id), self.task_data_ttl
         )
-        cutoff = now - timedelta(seconds=self.task_data_ttl)
         pipeline.zremrangebyscore(REDIS_KEY_RECENT_TASKS, 0, cutoff.timestamp())
 
         self._update_queue_len(pipeline, routing_key)
@@ -79,22 +83,15 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         if worker == "unknown":
             worker = kw.get("hostname", "unknown")
 
-        task_args_str = json.dumps(args, default=str) if args else None
-        task_kwargs_str = json.dumps(kwargs, default=str) if kwargs else None
-
         update_data = {
-            "status": "STARTED",
-            "worker": worker,
-            "date_started": str(now.timestamp()),
+            TaskField.STATUS: "STARTED",
+            TaskField.WORKER: worker,
+            TaskField.DATE_STARTED: str(now.timestamp()),
         }
-        if task_args_str:
-            update_data["task_args"] = task_args_str
-        if task_kwargs_str:
-            update_data["task_kwargs"] = task_kwargs_str
 
         # Read existing status before pipeline to decide count transition
         existing_status = self.redis_client.hget(
-            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "status"
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), TaskField.STATUS
         )
 
         pipeline = self.redis_client.pipeline()
@@ -104,12 +101,15 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         # Fallback: set date_created and task_name only if not already set by publish handler
         pipeline.hsetnx(
             REDIS_KEY_TASK_DETAILS.format(task_id=task_id),
-            "date_created",
+            TaskField.DATE_CREATED,
             str(now.timestamp()),
         )
         pipeline.hsetnx(
-            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "task_name", task.name
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id),
+            TaskField.TASK_NAME,
+            task.name,
         )
+        cutoff = now - timedelta(seconds=self.task_data_ttl)
         pipeline.zadd(REDIS_KEY_RECENT_TASKS, {task_id: now.timestamp()})
         pipeline.sadd(REDIS_KEY_TASKS_NAMES, task.name)
         pipeline.sadd(REDIS_KEY_WORKERS_NAMES, worker)
@@ -119,33 +119,34 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         pipeline.expire(
             REDIS_KEY_TASK_DETAILS.format(task_id=task_id), self.task_data_ttl
         )
-        cutoff = now - timedelta(seconds=self.task_data_ttl)
         pipeline.zremrangebyscore(REDIS_KEY_RECENT_TASKS, 0, cutoff.timestamp())
         self._update_queue_len(pipeline, queue_name)
         pipeline.execute()
 
     def task_postrun_handler(
-        self, sender=None, task_id=None, task=None, state=None, retval=None, **kwargs
+        self,
+        sender=None,
+        task_id=None,
+        task=None,
+        args=None,
+        kwargs=None,
+        state=None,
+        retval=None,
+        **kw,
     ):
         now = timezone.now()
 
         update_data = {
-            "status": state,
-            "date_done": str(now.timestamp()),
+            TaskField.STATUS: state,
+            TaskField.DATE_DONE: str(now.timestamp()),
         }
 
-        if retval is not None:
-            try:
-                result_str = json.dumps(retval)
-                update_data["result"] = result_str
-            except (TypeError, ValueError):
-                # If not serializable, store string representation
-                update_data["result"] = str(retval)
+        result_str = self._get_result_str(retval)
 
         task_data = self.redis_client.hgetall(
             REDIS_KEY_TASK_DETAILS.format(task_id=task_id)
         )
-        previous_status = task_data.get("status") if task_data else None
+        previous_status = task_data.get(TaskField.STATUS) if task_data else None
 
         pipeline = self.redis_client.pipeline()
 
@@ -162,31 +163,62 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         )
         pipeline.execute()
 
-    def task_failure_handler(self, sender=None, task_id=None, exception=None, **kwargs):
-        exception_info = {
-            "exception": str(exception),
-            "exception_type": type(exception).__name__,
-        }
+        if not self.bytes_client or state == "FAILURE":
+            return
 
-        pipeline = self.redis_client.pipeline()
-        pipeline.hset(
-            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=exception_info
+        task_args_str = json.dumps(args, default=str) if args else None
+        task_kwargs_str = json.dumps(kwargs, default=str) if kwargs else None
+        result_payload = {}
+        if task_args_str:
+            result_payload[TaskField.TASK_ARGS] = task_args_str
+        if task_kwargs_str:
+            result_payload[TaskField.TASK_KWARGS] = task_kwargs_str
+        if result_str is not None:
+            result_payload[TaskField.RESULT] = result_str
+        if result_payload:
+            self.bytes_client.set(
+                REDIS_KEY_TASK_PAYLOAD.format(task_id=task_id),
+                lz4.frame.compress(json.dumps(result_payload).encode()),
+                ex=self.task_data_ttl,
+            )
+
+    def task_failure_handler(
+        self, sender=None, task_id=None, exception=None, args=None, kwargs=None, **kw
+    ):
+        if not self.bytes_client:
+            return
+
+        task_args_str = json.dumps(args, default=str) if args else None
+        task_kwargs_str = json.dumps(kwargs, default=str) if kwargs else None
+        error_payload = {
+            TaskField.EXCEPTION: str(exception),
+            TaskField.EXCEPTION_TYPE: type(exception).__name__,
+        }
+        if task_args_str:
+            error_payload[TaskField.TASK_ARGS] = task_args_str
+        if task_kwargs_str:
+            error_payload[TaskField.TASK_KWARGS] = task_kwargs_str
+        self.bytes_client.set(
+            REDIS_KEY_TASK_PAYLOAD.format(task_id=task_id),
+            lz4.frame.compress(json.dumps(error_payload).encode()),
+            ex=self.task_data_ttl,
         )
-        pipeline.execute()
 
     def task_retry_handler(self, sender=None, task_id=None, reason=None, **kwargs):
         pipeline = self.redis_client.pipeline()
-        pipeline.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "status", "RETRY")
+        pipeline.hset(
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), TaskField.STATUS, "RETRY"
+        )
 
         if reason:
             pipeline.hset(
                 REDIS_KEY_TASK_DETAILS.format(task_id=task_id),
-                "retry_reason",
+                TaskField.RETRY_REASON,
                 str(reason),
             )
 
         pipeline.hincrby(
-            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), "retry_count", 1
+            REDIS_KEY_TASK_DETAILS.format(task_id=task_id), TaskField.RETRY_COUNT, 1
         )
         pipeline.execute()
 
@@ -200,15 +232,15 @@ class RedisSignalsResultBackend(SignalsResultBackend):
         now = timezone.now()
 
         update_data = {
-            "status": "REVOKED",
-            "date_done": str(now.timestamp()),
-            "terminated": str(terminated),
+            TaskField.STATUS: "REVOKED",
+            TaskField.DATE_DONE: str(now.timestamp()),
+            TaskField.TERMINATED: str(terminated),
         }
 
         task_data = self.redis_client.hgetall(
             REDIS_KEY_TASK_DETAILS.format(task_id=task_id)
         )
-        previous_status = task_data.get("status") if task_data else None
+        previous_status = task_data.get(TaskField.STATUS) if task_data else None
 
         pipeline = self.redis_client.pipeline()
         pipeline.hset(
@@ -232,6 +264,18 @@ class RedisSignalsResultBackend(SignalsResultBackend):
             )
         except Exception as e:
             logger.warning("Could not connect to Redis for monitoring: %s", e)
+            return None
+
+    def _get_bytes_redis_client(self):
+        try:
+            import redis
+
+            redis_url = self.app.conf.result_backend or self.app.conf.broker_url
+            return redis.from_url(
+                redis_url, decode_responses=False, socket_connect_timeout=3
+            )
+        except Exception as e:
+            logger.warning("Could not connect to Redis (bytes) for monitoring: %s", e)
             return None
 
     def _get_broker_redis_client(self):
@@ -277,3 +321,12 @@ class RedisSignalsResultBackend(SignalsResultBackend):
             maxlen=self.queue_history_maxlen,
             approximate=True,
         )
+
+    def _get_result_str(self, retval: Any) -> str | None:
+        if retval is None:
+            return None
+
+        try:
+            return json.dumps(retval)
+        except (TypeError, ValueError):
+            return str(retval)
