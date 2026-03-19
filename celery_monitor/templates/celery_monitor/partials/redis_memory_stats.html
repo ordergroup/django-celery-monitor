@@ -1,0 +1,16 @@
+{% if stats.error %}
+    <p class="loading-indicator">{{ stats.error }}</p>
+{% else %}
+    <div class="redis-memory-stats">
+        <span class="redis-memory-total">Total: <strong>{{ stats.total }}</strong> ({{ stats.total_keys }} keys)</span>
+        <div class="redis-memory-categories">
+            {% for name, cat in stats.categories.items %}
+                <span class="redis-memory-cat">
+                    <span class="redis-memory-cat__label">{{ name }}</span>
+                    <span class="redis-memory-cat__value">{{ cat.size }}</span>
+                    <span class="redis-memory-cat__count">({{ cat.count }})</span>
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}

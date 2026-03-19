@@ -7,6 +7,10 @@
             crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
             crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"
+            crossorigin="anonymous"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
 {% endblock %}
 {% block title %}Celery Monitor Dashboard{% endblock %}
@@ -17,6 +21,41 @@
     <script src="{% static 'celery_monitor/queue_history_chart.js' %}"></script>
 {% endblock %}
 {% block content %}
+    {% is_redis as redis_enabled %}
+    {% if redis_enabled %}
+        <div class="info-box">
+            <div hx-get="{% url 'admin:celery_monitor_redis_memory_stats' %}"
+                 hx-trigger="load, every 30s, refreshMemoryInfo from:body"
+                 hx-swap="innerHTML"
+                 class="info-box__memory">
+                <span class="loading-indicator">Loading memory stats...</span>
+            </div>
+            <div class="info-box__actions">
+                <button class="action-btn action-btn--neutral"
+                        hx-post="{% url 'admin:celery_monitor_compute_stats' %}"
+                        hx-swap="none"
+                        hx-confirm="Trigger stats computation from all task results?">Compute stats</button>
+                <button class="action-btn action-btn--neutral"
+                        hx-post="{% url 'admin:celery_monitor_prune_stale_recent_tasks' %}"
+                        hx-swap="none"
+                        hx-confirm="Remove task IDs from the recent index that have no detail data?">
+                    Prune stale tasks
+                </button>
+                <button class="action-btn action-btn--warning"
+                        hx-post="{% url 'admin:celery_monitor_clear_computed_stats' %}"
+                        hx-swap="none"
+                        hx-confirm="Clear all pre-computed stats?">Clear computed stats</button>
+                <button class="action-btn action-btn--warning"
+                        hx-post="{% url 'admin:celery_monitor_clear_results' %}"
+                        hx-swap="none"
+                        hx-confirm="Clear all task results from Redis?">Clear celery results</button>
+                <button class="action-btn action-btn--danger"
+                        hx-post="{% url 'admin:celery_monitor_clear_all' %}"
+                        hx-swap="none"
+                        hx-confirm="Clear everything (computed stats + task results)?">Clear all</button>
+            </div>
+        </div>
+    {% endif %}
     <div>
         <h2 class="section-title"
             style="display: flex;
@@ -53,7 +92,9 @@
              hx-trigger="load, every 5s, refresh"
              hx-swap="innerHTML"></div>
     </div>
-    <div>{% include "celery_monitor/partials/queue_len_history.html" %}</div>
+    {% if redis_enabled %}
+        <div>{% include "celery_monitor/partials/queue_len_history.html" %}</div>
+    {% endif %}
     <div>
         <h2 class="section-title"
             style="cursor: pointer;

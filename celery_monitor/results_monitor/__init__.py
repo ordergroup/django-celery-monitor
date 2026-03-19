@@ -1,9 +1,15 @@
+import time
+
 from django.conf import settings
 
 from celery_monitor.enums import BackendType
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import has_django_celery_result, has_redis
+
+_MONITOR_CLASS_CACHE_TTL = 30  # seconds
+_cached_monitor_class: type[CeleryResultsMonitor] | None = None
+_cache_expires_at: float = 0.0
 
 
 def get_results_monitor() -> CeleryResultsMonitor:
@@ -25,6 +31,17 @@ def get_results_monitor() -> CeleryResultsMonitor:
     Settings:
         CELERY_MONITOR_RESULTS_BACKEND: str - Backend type ("celery_results", "redis", or unset)
     """
+    global _cached_monitor_class, _cache_expires_at
+
+    now = time.monotonic()
+    if _cached_monitor_class is None or now >= _cache_expires_at:
+        _cached_monitor_class = _resolve_monitor_class()
+        _cache_expires_at = now + _MONITOR_CLASS_CACHE_TTL
+
+    return _cached_monitor_class()
+
+
+def _resolve_monitor_class() -> type[CeleryResultsMonitor]:
     results_backend = BackendType.from_str(
         getattr(settings, "CELERY_MONITOR_RESULTS_BACKEND", "unknown")
     )
@@ -37,14 +54,25 @@ def get_results_monitor() -> CeleryResultsMonitor:
             DjangoCeleryResultsMonitor,
         )
 
-        return DjangoCeleryResultsMonitor()
+        return DjangoCeleryResultsMonitor
 
-    elif results_backend in (BackendType.REDIS, BackendType.UNKNOWN) and has_redis():
+    if results_backend in (BackendType.REDIS, BackendType.UNKNOWN) and has_redis():
+        from celery_monitor.redis.client import get_results_client
+        from celery_monitor.redis.keys import REDIS_KEY_LAST_CALCULATION_TIMESTAMP
+        from celery_monitor.results_monitor.redis_computed_results import (
+            RedisComputedResultsMonitor,
+        )
         from celery_monitor.results_monitor.redis_results import (
             RedisResultsMonitor,
         )
 
-        return RedisResultsMonitor()
+        redis = get_results_client()
+        has_calculated_results = bool(redis.get(REDIS_KEY_LAST_CALCULATION_TIMESTAMP))
 
-    # Default: use monitor with limited functionality
-    return WorkersCeleryResultsMonitor()
+        return (
+            RedisComputedResultsMonitor
+            if has_calculated_results
+            else RedisResultsMonitor
+        )
+
+    return WorkersCeleryResultsMonitor

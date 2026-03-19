@@ -137,7 +137,8 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
         **site.each_context(request),
         "title": "Task Execution Stats",
         "execution_stats": execution_stats,
-        "hours_param": request.GET.get("hours", ""),
+        "hours_param": request.GET.get("hours")
+        or ("" if request.GET.get("date_from") else "1"),
         "filters": filters,
     }
     return TemplateResponse(
@@ -173,9 +174,11 @@ def task_detail_view(request: HttpRequest, site: AdminSite, task_id: str):
 def task_results(request: HttpRequest, site: AdminSite):
     filters = TaskResultsFilters.from_request(request)
     results_monitor = get_results_monitor()
+    queue_monitor = get_queue_monitor()
     result = results_monitor.get_tasks(
         status=filters.status,
         task_name=filters.task_name,
+        queue_name=filters.queue_name,
         worker=filters.worker,
         date_from=filters.date_from,
         date_to=filters.date_to,
@@ -184,6 +187,7 @@ def task_results(request: HttpRequest, site: AdminSite):
     )
     total_pages = max(1, math.ceil(result.total / filters.page_size))
     task_names = results_monitor.get_tasks_names()
+    queue_names = queue_monitor.get_queue_names()
     workers = results_monitor.get_workers_names()
 
     context = {
@@ -192,10 +196,12 @@ def task_results(request: HttpRequest, site: AdminSite):
         "tasks": result.tasks,
         "total": result.total,
         "task_names": task_names,
+        "queue_names": queue_names,
         "workers": workers,
         "filters": filters,
         "total_pages": total_pages,
         "is_redis": is_redis_backend(),
+        "filter_skipped": result.filter_skipped,
     }
     return TemplateResponse(request, "celery_monitor/task_results.html", context)
 
@@ -233,18 +239,21 @@ def task_type_detail_view(request: HttpRequest, site: AdminSite):
     total_pages = max(1, math.ceil(result.total / filters.page_size))
     workers = results_monitor.get_workers_names()
 
-    queued_timestamps, started_timestamps = results_monitor.get_throughput_time_series(
+    throughput_buckets = results_monitor.get_throughput_time_series(
         task_name=filters.task_name,
         date_from=filters.date_from,
         date_to=filters.date_to,
     )
     # Build cumulative step series: each point is {x: iso_timestamp, y: cumulative_count}
-    queued_cumulative = [
-        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(queued_timestamps)
-    ]
-    started_cumulative = [
-        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(started_timestamps)
-    ]
+    queued_total = 0
+    started_total = 0
+    queued_cumulative = []
+    started_cumulative = []
+    for b in throughput_buckets:
+        queued_total += b.queued_count
+        queued_cumulative.append({"x": b.bucket.isoformat(), "y": queued_total})
+        started_total += b.started_count
+        started_cumulative.append({"x": b.bucket.isoformat(), "y": started_total})
 
     chart_data = {
         "labels": [ts.bucket.isoformat() for ts in time_series],
@@ -279,6 +288,7 @@ def task_type_detail_view(request: HttpRequest, site: AdminSite):
         "total_pages": total_pages,
         "is_redis": is_redis_backend(),
         "chart_data_json": json.dumps(chart_data),
+        "filter_skipped": result.filter_skipped,
     }
     return TemplateResponse(request, "celery_monitor/task_type_detail.html", context)
 
@@ -315,19 +325,20 @@ def queue_detail_view(request: HttpRequest, site: AdminSite):
     total_pages = max(1, math.ceil(result.total / filters.page_size))
     workers = results_monitor.get_workers_names()
 
-    queued_timestamps, started_timestamps = (
-        results_monitor.get_queue_throughput_time_series(
-            queue_name=filters.queue_name,
-            date_from=filters.date_from,
-            date_to=filters.date_to,
-        )
+    throughput_buckets = results_monitor.get_queue_throughput_time_series(
+        queue_name=filters.queue_name,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
     )
-    queued_cumulative = [
-        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(queued_timestamps)
-    ]
-    started_cumulative = [
-        {"x": ts.isoformat(), "y": i + 1} for i, ts in enumerate(started_timestamps)
-    ]
+    queued_total = 0
+    started_total = 0
+    queued_cumulative = []
+    started_cumulative = []
+    for b in throughput_buckets:
+        queued_total += b.queued_count
+        queued_cumulative.append({"x": b.bucket.isoformat(), "y": queued_total})
+        started_total += b.started_count
+        started_cumulative.append({"x": b.bucket.isoformat(), "y": started_total})
 
     chart_data = {
         "labels": [ts.bucket.isoformat() for ts in time_series],
@@ -362,8 +373,61 @@ def queue_detail_view(request: HttpRequest, site: AdminSite):
         "total_pages": total_pages,
         "is_redis": is_redis_backend(),
         "chart_data_json": json.dumps(chart_data),
+        "filter_skipped": result.filter_skipped,
     }
     return TemplateResponse(request, "celery_monitor/queue_detail.html", context)
+
+
+_REFRESH_TRIGGER = {"HX-Trigger": "refreshMemoryInfo"}
+
+
+@require_POST
+def clear_computed_stats_view(request: HttpRequest, site: AdminSite):
+    from celery_monitor.redis.tasks import clear_celery_stats
+
+    clear_celery_stats.delay()
+    return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
+
+
+@require_POST
+def compute_stats_view(request: HttpRequest, site: AdminSite):
+    from celery_monitor.redis.tasks import calculate_celery_stats
+
+    calculate_celery_stats.delay(overwrite=True)
+    return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
+
+
+@require_POST
+def clear_results_view(request: HttpRequest, site: AdminSite):
+    from celery_monitor.redis.tasks import clear_celery_results
+
+    clear_celery_results.delay()
+    return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
+
+
+@require_POST
+def clear_all_view(request: HttpRequest, site: AdminSite):
+    from celery_monitor.redis.tasks import clear_all_celery_data
+
+    clear_all_celery_data.delay()
+    return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
+
+
+@require_POST
+def prune_stale_recent_tasks_view(request: HttpRequest, site: AdminSite):
+    from celery_monitor.redis.tasks import prune_stale_recent_tasks
+
+    prune_stale_recent_tasks.delay()
+    return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
+
+
+def redis_memory_stats_view(request: HttpRequest):
+    from celery_monitor.redis.memory import get_redis_memory_stats
+
+    stats = get_redis_memory_stats()
+    return TemplateResponse(
+        request, "celery_monitor/partials/redis_memory_stats.html", {"stats": stats}
+    )
 
 
 @require_POST

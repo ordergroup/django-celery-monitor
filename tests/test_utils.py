@@ -154,10 +154,17 @@ class TestGetResultsMonitor:
         settings.CELERY_MONITOR_RESULTS_BACKEND = "redis"
 
         try:
+            from unittest.mock import MagicMock
+
             from celery_monitor.results_monitor import get_results_monitor
             from celery_monitor.results_monitor.redis_results import RedisResultsMonitor
 
-            with patch.object(RedisResultsMonitor, "_init_client", return_value=None):
+            mock_redis_client = MagicMock()
+            mock_redis_client.get.return_value = None
+            with patch(
+                "celery_monitor.redis.client.get_results_client",
+                return_value=mock_redis_client,
+            ):
                 result = get_results_monitor()
             assert isinstance(result, RedisResultsMonitor)
         except ImportError:

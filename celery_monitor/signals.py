@@ -25,7 +25,7 @@ def task_prerun_handler(
     from celery import current_app
 
     get_signals_backend(current_app).task_prerun_handler(
-        sender, task_id, task, args, kwargs, **kw
+        sender=sender, task_id=task_id, task=task, args=args, kwargs=kwargs, **kw
     )
 
 
@@ -36,7 +36,7 @@ def task_postrun_handler(
     from celery import current_app
 
     get_signals_backend(current_app).task_postrun_handler(
-        sender, task_id, task, state, retval, **kwargs
+        sender=sender, task_id=task_id, task=task, state=state, retval=retval, **kwargs
     )
 
 
@@ -45,7 +45,7 @@ def task_failure_handler(sender=None, task_id=None, exception=None, **kwargs):
     from celery import current_app
 
     get_signals_backend(current_app).task_failure_handler(
-        sender, task_id, exception, **kwargs
+        sender=sender, task_id=task_id, exception=exception, **kwargs
     )
 
 
@@ -54,7 +54,7 @@ def task_retry_handler(sender=None, task_id=None, reason=None, **kwargs):
     from celery import current_app
 
     get_signals_backend(current_app).task_retry_handler(
-        sender, task_id, reason, **kwargs
+        sender=sender, task_id=task_id, reason=reason, **kwargs
     )
 
 
@@ -63,5 +63,5 @@ def task_revoked_handler(sender=None, request=None, terminated=None, **kwargs):
     from celery import current_app
 
     get_signals_backend(current_app).task_revoked_handler(
-        sender, request, terminated, **kwargs
+        sender=sender, request=request, terminated=terminated, **kwargs
     )

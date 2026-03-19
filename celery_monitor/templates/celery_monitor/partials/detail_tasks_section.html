@@ -56,6 +56,11 @@ document.getElementById('task-filters-form').addEventListener('change', function
 });
     </script>
 {% endif %}
+{% if filter_skipped %}
+    <div class="info-box info-box--warning">
+        Filtering by task name or queue is unavailable when there are more than 100,000 recent tasks. Showing unfiltered results.
+    </div>
+{% endif %}
 <div class="table-meta">
     <span>{{ total }} task{{ total|pluralize }} total</span>
     {% if total_pages > 1 %}&mdash; Page {{ filters.page|add:1 }} of {{ total_pages }}{% endif %}

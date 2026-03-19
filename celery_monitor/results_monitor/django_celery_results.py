@@ -15,6 +15,7 @@ from celery_monitor.models import (
     TaskOverview,
     TasksPage,
     TaskTypeTimeSeries,
+    ThroughputBucket,
     WorkerStats,
 )
 from celery_monitor.results_monitor.base import CeleryResultsMonitor
@@ -481,33 +482,8 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         task_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        try:
-            base_qs = TaskResult.objects.filter(task_name=task_name)
-            if date_from:
-                if timezone.is_naive(date_from):
-                    date_from = timezone.make_aware(date_from)
-                base_qs = base_qs.filter(date_done__gte=date_from)
-            if date_to:
-                if timezone.is_naive(date_to):
-                    date_to = timezone.make_aware(date_to)
-                base_qs = base_qs.filter(date_done__lte=date_to)
-
-            queued = sorted(
-                base_qs.filter(date_created__isnull=False).values_list(
-                    "date_created", flat=True
-                )
-            )
-            started = sorted(
-                base_qs.filter(date_started__isnull=False).values_list(
-                    "date_started", flat=True
-                )
-            )
-            return queued, started
-
-        except Exception as e:
-            logger.exception("Error getting throughput time series: %s", e)
-            return [], []
+    ) -> list[ThroughputBucket]:
+        return []
 
     def get_queue_time_series(
         self,
@@ -523,9 +499,8 @@ class DjangoCeleryResultsMonitor(CeleryResultsMonitor):
         queue_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        # queue_name is not stored in django-celery-results TaskResult
-        return [], []
+    ) -> list[ThroughputBucket]:
+        return []
 
     def get_tasks_names(self) -> list[str]:
         return cache.get_or_set(

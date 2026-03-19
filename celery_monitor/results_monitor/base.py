@@ -9,6 +9,7 @@ from celery_monitor.models import (
     TaskOverview,
     TasksPage,
     TaskTypeTimeSeries,
+    ThroughputBucket,
     WorkerStats,
 )
 
@@ -74,8 +75,8 @@ class CeleryResultsMonitor(ABC):
         task_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        """Returns (queued_timestamps, started_timestamps) — sorted lists of individual event times for a specific task type."""
+    ) -> list[ThroughputBucket]:
+        """Returns per-bucket queued/started counts for a specific task type."""
         ...
 
     @abstractmethod
@@ -92,8 +93,8 @@ class CeleryResultsMonitor(ABC):
         queue_name: str,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> tuple[list[datetime], list[datetime]]:
-        """Returns (queued_timestamps, started_timestamps) for all tasks in the given queue."""
+    ) -> list[ThroughputBucket]:
+        """Returns per-bucket queued/started counts for all tasks in the given queue."""
         ...
 
     @abstractmethod

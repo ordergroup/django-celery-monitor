@@ -1,4 +1,7 @@
+from typing import Any
+
 from celery import current_app
+from celery.app.control import Inspect
 from django.db import connection
 
 
@@ -52,3 +55,24 @@ def is_redis_backend() -> bool:
         return False
 
     return results_backend in (BackendType.REDIS, BackendType.UNKNOWN) and has_redis()
+
+
+def float_or(v: str | None, default: Any | None = None) -> float | Any | None:
+    return float(v) if v else default
+
+
+def create_active_targeted_inspect() -> tuple[Inspect, set[str]] | tuple[None, None]:
+    inspect = current_app.control.inspect(timeout=1.0)
+
+    # Get online workers using ping
+    ping_response = inspect.ping()
+    online_worker_names = set(ping_response.keys()) if ping_response else set()
+
+    if not online_worker_names:
+        return None, None
+
+    # Target only discovered workers for subsequent calls to avoid
+    # re-broadcasting to all workers and missing responses due to timing
+    return current_app.control.inspect(
+        destination=list(online_worker_names), timeout=1.0
+    ), online_worker_names

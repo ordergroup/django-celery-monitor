@@ -7,8 +7,11 @@ from celery_monitor.models import DashboardStatusCount
 try:
     import fakeredis as _fakeredis
 
+    from celery_monitor.enums import TaskField
     from celery_monitor.redis_keys import (
         REDIS_KEY_RECENT_TASKS,
+        REDIS_KEY_STATS_TASK,
+        REDIS_KEY_STATS_TASK_INDEX,
         REDIS_KEY_STATUS_COUNTS,
         REDIS_KEY_TASK_DETAILS,
         REDIS_KEY_TASKS_NAMES,
@@ -29,22 +32,24 @@ class TestRedisResultsMonitor:
 
     @pytest.fixture
     def monitor(self, fake_redis):
-        with patch.object(RedisResultsMonitor, "_init_client", lambda self: fake_redis):
+        with patch(
+            "celery_monitor.results_monitor.redis_results.get_results_client",
+            return_value=fake_redis,
+        ):
             return RedisResultsMonitor()
 
     def _add_task(
         self, r, task_id, task_name, status, worker, started_ts=None, done_ts=None
     ):
         data = {
-            "task_id": task_id,
-            "task_name": task_name,
-            "status": status,
-            "worker": worker,
+            TaskField.TASK_NAME: task_name,
+            TaskField.STATUS: status,
+            TaskField.WORKER: worker,
         }
         if started_ts is not None:
-            data["date_started"] = str(started_ts)
+            data[TaskField.DATE_STARTED] = str(started_ts)
         if done_ts is not None:
-            data["date_done"] = str(done_ts)
+            data[TaskField.DATE_DONE] = str(done_ts)
         r.hset(REDIS_KEY_TASK_DETAILS.format(task_id=task_id), mapping=data)
         r.zadd(REDIS_KEY_RECENT_TASKS, {task_id: done_ts or started_ts or 0.0})
         r.sadd(REDIS_KEY_TASKS_NAMES, task_name)
@@ -220,12 +225,40 @@ class TestRedisResultsMonitor:
     def test_get_task_execution_stats(self, monitor, fake_redis):
         import time
 
+        from celery_monitor.tasks import _collect_buckets, _save_stats
+
         now = time.time()
+        tasks = []
         for i in range(3):
             self._add_task(
                 fake_redis, f"s{i}", "tasks.add", "SUCCESS", "w1@h", now - 10, now
             )
+            tasks.append(
+                {
+                    "task_name": "tasks.add",
+                    "status": "SUCCESS",
+                    "date_started": str(now - 10),
+                    "date_done": str(now),
+                    "date_created": str(now - 12),
+                }
+            )
         self._add_task(fake_redis, "f1", "tasks.add", "FAILURE", "w1@h", now - 10, now)
+        tasks.append(
+            {
+                "task_name": "tasks.add",
+                "status": "FAILURE",
+                "date_started": str(now - 10),
+                "date_done": str(now),
+                "date_created": str(now - 12),
+            }
+        )
+
+        _save_stats(
+            fake_redis,
+            _collect_buckets(tasks, "task_name"),
+            REDIS_KEY_STATS_TASK,
+            REDIS_KEY_STATS_TASK_INDEX,
+        )
 
         result = monitor.get_task_execution_stats()
 

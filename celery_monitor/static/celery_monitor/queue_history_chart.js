@@ -37,6 +37,19 @@
         }));
     }
 
+    function showResetBtn() {
+        const btn = document.getElementById('queueHistoryResetZoom');
+        if (btn) btn.style.display = '';
+    }
+
+    window.resetQueueHistoryZoom = function () {
+        if (chart) {
+            chart.resetZoom();
+            const btn = document.getElementById('queueHistoryResetZoom');
+            if (btn) btn.style.display = 'none';
+        }
+    };
+
     function pad2(n) { return String(n).padStart(2, '0'); }
     function formatMs(ms) {
         const d = new Date(ms);
@@ -69,6 +82,19 @@
                         mode: 'nearest',
                         intersect: false,
                         callbacks: { title: items => formatMs(items[0].parsed.x) },
+                    },
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x',
+                            onZoom: showResetBtn,
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            onPan: showResetBtn,
+                        },
                     },
                 },
                 scales: {

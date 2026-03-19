@@ -90,7 +90,7 @@ class TestDjangoCeleryResultsMonitor:
         assert status_counts["FAILURE"] == 2
 
     @pytest.mark.django_db(transaction=True)
-    @patch("celery_monitor.results_monitor.workers_results.current_app")
+    @patch("celery_monitor.utils.current_app")
     def test_get_worker_stats_with_offline_workers(self, mock_app):
         """Test get_worker_stats includes offline workers from database."""
         # Create tasks with workers
