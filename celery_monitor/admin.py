@@ -59,11 +59,6 @@ def patch_admin_site(site):
                 name="celery_monitor_prune_stale_recent_tasks",
             ),
             path(
-                "celery-monitor/redis-memory-stats",
-                site.admin_view(views.redis_memory_stats_view),
-                name="celery_monitor_redis_memory_stats",
-            ),
-            path(
                 "celery-monitor/redis-queue-stats",
                 site.admin_view(views.redis_queue_stats_view),
                 name="celery_monitor_redis_queue_stats",

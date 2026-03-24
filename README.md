@@ -191,6 +191,16 @@ CELERY_MONITOR_RESULTS_BACKEND = "redis"  # Use Redis custom backend
 2. **Redis** (if Redis is configured in `CELERY_BROKER_URL` or `CELERY_RESULT_BACKEND`)
 3. **Base** (fallback with limited functionality)
 
+## Dashboard Configuration
+
+```python
+# settings.py
+
+# How often the dashboard auto-refreshes, in seconds.
+# Default: 60
+DJANGO_CELERY_MONITOR_DASHBOARD_REFRESH_INTERVAL = 60
+```
+
 ## Optional: PostgreSQL Optimization
 
 If using PostgreSQL, you can create a materialized view for better performance on large datasets:

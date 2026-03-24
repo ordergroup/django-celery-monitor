@@ -2,6 +2,7 @@ import json
 import math
 
 from celery import current_app
+from django.conf import settings
 from django.contrib.admin import AdminSite
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse
 from django.template.response import TemplateResponse
@@ -149,9 +150,13 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
 
 
 def dashboard_view(request: HttpRequest, site: AdminSite):
+    refresh_interval = getattr(
+        settings, "DJANGO_CELERY_MONITOR_DASHBOARD_REFRESH_INTERVAL", 60
+    )
     context = {
         **site.each_context(request),
         "title": "Celery Monitor",
+        "refresh_interval": refresh_interval,
     }
     return TemplateResponse(request, "celery_monitor/dashboard.html", context)
 
@@ -419,15 +424,6 @@ def prune_stale_recent_tasks_view(request: HttpRequest, site: AdminSite):
 
     prune_stale_recent_tasks.delay()
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
-
-
-def redis_memory_stats_view(request: HttpRequest):
-    from celery_monitor.redis.memory import get_redis_memory_stats
-
-    stats = get_redis_memory_stats()
-    return TemplateResponse(
-        request, "celery_monitor/partials/redis_memory_stats.html", {"stats": stats}
-    )
 
 
 @require_POST
