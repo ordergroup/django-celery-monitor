@@ -1021,6 +1021,8 @@ pre.code-block {
   transition: background .15s, color .15s;
   background: transparent;
 }
+.action-btn--primary { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+.action-btn--primary:hover { background: #1b5e20; border-color: #1b5e20; }
 .action-btn--neutral { color: #417690; border-color: #417690; }
 .action-btn--neutral:hover { background: #417690; color: #fff; }
 .action-btn--warning { color: #d97706; border-color: #d97706; }
@@ -1028,6 +1030,10 @@ pre.code-block {
 .action-btn--danger { color: #dc3545; border-color: #dc3545; }
 .action-btn--danger:hover { background: #dc3545; color: #fff; }
 
+.dark .action-btn--primary,
+[data-theme="dark"] .action-btn--primary { background: #2e7d32; border-color: #4caf50; }
+.dark .action-btn--primary:hover,
+[data-theme="dark"] .action-btn--primary:hover { background: #1b5e20; border-color: #4caf50; }
 .dark .action-btn--neutral,
 [data-theme="dark"] .action-btn--neutral { color: #7ab3cc; border-color: #7ab3cc; }
 .dark .action-btn--neutral:hover,

@@ -22,9 +22,11 @@
 {% endblock %}
 {% block content %}
     {% is_redis as redis_enabled %}
-    {% if redis_enabled %}
-        <div class="info-box">
-            <div class="info-box__actions">
+    <div class="info-box">
+        <div class="info-box__actions">
+            <button class="action-btn action-btn--primary"
+                    onclick="htmx.trigger(document.body, 'refresh')">↻ Refresh</button>
+            {% if redis_enabled %}
                 <button class="action-btn action-btn--neutral"
                         hx-post="{% url 'admin:celery_monitor_compute_stats' %}"
                         hx-swap="none"
@@ -47,9 +49,9 @@
                         hx-post="{% url 'admin:celery_monitor_clear_all' %}"
                         hx-swap="none"
                         hx-confirm="Clear everything (computed stats + task results)?">Clear all</button>
-            </div>
+            {% endif %}
         </div>
-    {% endif %}
+    </div>
     <div>
         <h2 class="section-title"
             style="display: flex;
@@ -73,7 +75,7 @@
             </label>
         </h2>
         <div hx-get="{% url 'admin:celery_monitor_worker_stats' %}"
-             hx-trigger="load, every 5s, change from:#offline-toggle"
+             hx-trigger="load, every {{ refresh_interval }}s, refresh from:body, change from:#offline-toggle"
              hx-include="#offline-toggle"
              hx-swap="innerHTML">
             <p class="loading-indicator">Loading</p>
@@ -83,7 +85,7 @@
         <h2 class="section-title">Redis Queue Stats</h2>
         <div id="queue-stats"
              hx-get="{% url 'admin:celery_monitor_redis_queue_stats' %}"
-             hx-trigger="load, every 5s, refresh"
+             hx-trigger="load, every {{ refresh_interval }}s, refresh from:body"
              hx-swap="innerHTML"></div>
     </div>
     {% if redis_enabled %}
@@ -99,7 +101,7 @@
         <div id="reserved-tasks-accordion"
              style="display: none"
              hx-get="{% url 'admin:celery_monitor_reserved_tasks' %}"
-             hx-trigger="accordion-open, every 5s [this.style.display !== 'none']"
+             hx-trigger="accordion-open, every {{ refresh_interval }}s [this.style.display !== 'none'], refresh from:body"
              hx-swap="innerHTML"
              hx-on::after-swap="applyRevokedStates()">
             <p class="loading-indicator">Loading</p>
@@ -115,7 +117,7 @@
         <div id="task-types-accordion"
              style="display: none"
              hx-get="{% url 'admin:celery_monitor_redis_queue_task_types' %}"
-             hx-trigger="accordion-open, every 5s [this.style.display !== 'none']"
+             hx-trigger="accordion-open, every {{ refresh_interval }}s [this.style.display !== 'none'], refresh from:body"
              hx-swap="innerHTML">
             <p class="loading-indicator">Loading</p>
         </div>
@@ -123,19 +125,19 @@
     <div>
         <h2 class="section-title">Overall Stats</h2>
         <div hx-get="{% url 'admin:celery_monitor_statuses_overall_count' %}"
-             hx-trigger="load, every 5s"
+             hx-trigger="load, every {{ refresh_interval }}s, refresh from:body"
              hx-swap="innerHTML"></div>
     </div>
     <div>
         <h2 class="section-title">Last Hour</h2>
         <div hx-get="{% url 'admin:celery_monitor_statuses_last_hour_count' %}"
-             hx-trigger="load, every 5s"
+             hx-trigger="load, every {{ refresh_interval }}s, refresh from:body"
              hx-swap="innerHTML"></div>
     </div>
     <div>
         <h2 class="section-title">Recent Tasks (last 50)</h2>
         <div hx-get="{% url 'admin:celery_monitor_recent_tasks' %}"
-             hx-trigger="load"
+             hx-trigger="load, refresh from:body"
              hx-swap="innerHTML"></div>
     </div>
 {% endblock %}

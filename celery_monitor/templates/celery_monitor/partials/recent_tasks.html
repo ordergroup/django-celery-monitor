@@ -52,13 +52,6 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="filter-group">
-            <button type="button"
-                    hx-get="{% url 'admin:celery_monitor_recent_tasks' %}?status={{ filters.status|default:'' }}&task_name={{ filters.task_name|default:'' }}&worker={{ filters.worker|default:'' }}"
-                    hx-target="#recent-tasks-container"
-                    hx-swap="innerHTML"
-                    style="cursor: pointer">↻ Refresh</button>
-        </div>
     </form>
     <table class="task-table">
         <thead>
