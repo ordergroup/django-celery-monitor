@@ -24,12 +24,6 @@
     {% is_redis as redis_enabled %}
     {% if redis_enabled %}
         <div class="info-box">
-            <div hx-get="{% url 'admin:celery_monitor_redis_memory_stats' %}"
-                 hx-trigger="load, every 30s, refreshMemoryInfo from:body"
-                 hx-swap="innerHTML"
-                 class="info-box__memory">
-                <span class="loading-indicator">Loading memory stats...</span>
-            </div>
             <div class="info-box__actions">
                 <button class="action-btn action-btn--neutral"
                         hx-post="{% url 'admin:celery_monitor_compute_stats' %}"
