@@ -2,8 +2,8 @@
 {% load static %}
 {% load celery_monitor_tags %}
 {% block extrabody %}
-  {{ block.super }}
-  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
 {% endblock %}
 {% block title %}{{ queue_name|default:"Queue Detail" }}{% endblock %}
 {% block extrastyle %}
