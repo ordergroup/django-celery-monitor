@@ -1,7 +1,10 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% load celery_monitor_tags %}
-{% block extrabody %}<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>{% endblock %}
+{% block extrabody %}
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+{% endblock %}
 {% block title %}Task Results{% endblock %}
 {% block extrastyle %}
     {{ block.super }}
