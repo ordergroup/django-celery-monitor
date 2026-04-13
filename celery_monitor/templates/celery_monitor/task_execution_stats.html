@@ -1,6 +1,9 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
-{% block extrabody %}<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>{% endblock %}
+{% block extrabody %}
+  {{ block.super }}
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+{% endblock %}
 {% block title %}Task Execution Stats{% endblock %}
 {% block extrastyle %}
     {{ block.super }}
