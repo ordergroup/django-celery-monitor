@@ -334,7 +334,7 @@ wheels = [
 
 [[package]]
 name = "django-celery-monitor"
-version = "0.5.3"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "celery" },

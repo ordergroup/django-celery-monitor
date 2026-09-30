@@ -4,6 +4,7 @@ import math
 from celery import current_app
 from django.conf import settings
 from django.contrib.admin import AdminSite
+from django.contrib.auth.decorators import permission_required
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse
 from django.template.response import TemplateResponse
 from django.views.decorators.http import require_POST
@@ -16,12 +17,14 @@ from celery_monitor.filters import (
     TaskTypeDetailFilters,
     WorkerStatsFilters,
 )
+from celery_monitor.permissions import MANAGE_PERMISSION, VIEW_PERMISSION
 from celery_monitor.queue_monitor import get_queue_monitor
 from celery_monitor.results_monitor import get_results_monitor
 from celery_monitor.results_monitor.workers_results import WorkersCeleryResultsMonitor
 from celery_monitor.utils import is_redis_backend
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def status_counts_overall_view(request: HttpRequest):
     results_monitor = get_results_monitor()
     status_counts = results_monitor.get_overall_status_counts()
@@ -33,6 +36,7 @@ def status_counts_overall_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def status_counts_last_hour_view(request: HttpRequest):
     results_monitor = get_results_monitor()
     status_counts = results_monitor.get_last_hour_status_counts()
@@ -44,6 +48,7 @@ def status_counts_last_hour_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def redis_queue_stats_view(request: HttpRequest):
     queue_monitor = get_queue_monitor()
     context = {"queue_stats": queue_monitor.get_queue_stats()}
@@ -54,6 +59,7 @@ def redis_queue_stats_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def redis_queue_task_types_view(request: HttpRequest):
     queue_monitor = get_queue_monitor()
     task_type_stats = queue_monitor.get_queue_task_types()
@@ -65,12 +71,14 @@ def redis_queue_task_types_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def redis_queue_history_view(request: HttpRequest):
     queue_monitor = get_queue_monitor()
     queues = queue_monitor.queue_length_history()
     return JsonResponse({"queues": queues})
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def worker_stats_view(request: HttpRequest):
     filters = WorkerStatsFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -85,6 +93,7 @@ def worker_stats_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def reserved_tasks_view(request: HttpRequest):
     workers_monitor = WorkersCeleryResultsMonitor()
     reserved_tasks = workers_monitor.get_reserved_tasks()
@@ -96,6 +105,7 @@ def reserved_tasks_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def recent_tasks_view(request: HttpRequest):
     filters = RecentTasksFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -125,6 +135,7 @@ def recent_tasks_view(request: HttpRequest):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def task_execution_stats_view(request: HttpRequest, site: AdminSite):
     filters = TaskExecutionStatsFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -149,6 +160,7 @@ def task_execution_stats_view(request: HttpRequest, site: AdminSite):
     )
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def dashboard_view(request: HttpRequest, site: AdminSite):
     refresh_interval = getattr(
         settings, "DJANGO_CELERY_MONITOR_DASHBOARD_REFRESH_INTERVAL", 60
@@ -161,6 +173,7 @@ def dashboard_view(request: HttpRequest, site: AdminSite):
     return TemplateResponse(request, "celery_monitor/dashboard.html", context)
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def task_detail_view(request: HttpRequest, site: AdminSite, task_id: str):
     results_monitor = get_results_monitor()
     task = results_monitor.get_task_detail(task_id)
@@ -176,6 +189,7 @@ def task_detail_view(request: HttpRequest, site: AdminSite, task_id: str):
     return TemplateResponse(request, "celery_monitor/task_detail.html", context)
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def task_results(request: HttpRequest, site: AdminSite):
     filters = TaskResultsFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -211,6 +225,7 @@ def task_results(request: HttpRequest, site: AdminSite):
     return TemplateResponse(request, "celery_monitor/task_results.html", context)
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def task_type_detail_view(request: HttpRequest, site: AdminSite):
     filters = TaskTypeDetailFilters.from_request(request)
     results_monitor = get_results_monitor()
@@ -298,6 +313,7 @@ def task_type_detail_view(request: HttpRequest, site: AdminSite):
     return TemplateResponse(request, "celery_monitor/task_type_detail.html", context)
 
 
+@permission_required(VIEW_PERMISSION, raise_exception=True)
 def queue_detail_view(request: HttpRequest, site: AdminSite):
     filters = QueueDetailFilters.from_request(request)
     queue_monitor = get_queue_monitor()
@@ -386,6 +402,7 @@ def queue_detail_view(request: HttpRequest, site: AdminSite):
 _REFRESH_TRIGGER = {"HX-Trigger": "refreshMemoryInfo"}
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def clear_computed_stats_view(request: HttpRequest, site: AdminSite):
     from celery_monitor.redis.tasks import clear_celery_stats
@@ -394,6 +411,7 @@ def clear_computed_stats_view(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def compute_stats_view(request: HttpRequest, site: AdminSite):
     from celery_monitor.redis.tasks import calculate_celery_stats
@@ -402,6 +420,7 @@ def compute_stats_view(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def clear_results_view(request: HttpRequest, site: AdminSite):
     from celery_monitor.redis.tasks import clear_celery_results
@@ -410,6 +429,7 @@ def clear_results_view(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def clear_all_view(request: HttpRequest, site: AdminSite):
     from celery_monitor.redis.tasks import clear_all_celery_data
@@ -418,6 +438,7 @@ def clear_all_view(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def prune_stale_recent_tasks_view(request: HttpRequest, site: AdminSite):
     from celery_monitor.redis.tasks import prune_stale_recent_tasks
@@ -426,6 +447,7 @@ def prune_stale_recent_tasks_view(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204, headers=_REFRESH_TRIGGER)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def clear_queue(request: HttpRequest, site: AdminSite, queue_name: str):
     queue_monitor = get_queue_monitor()
@@ -433,6 +455,7 @@ def clear_queue(request: HttpRequest, site: AdminSite, queue_name: str):
     return HttpResponse(status=204)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def clear_all_queues(request: HttpRequest, site: AdminSite):
     queue_monitor = get_queue_monitor()
@@ -441,6 +464,7 @@ def clear_all_queues(request: HttpRequest, site: AdminSite):
     return HttpResponse(status=204)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def kill_task(request: HttpRequest, site: AdminSite, task_id: str):
     sigkill = request.GET.get("sigkill") is not None
@@ -449,6 +473,7 @@ def kill_task(request: HttpRequest, site: AdminSite, task_id: str):
     return HttpResponse(status=204)
 
 
+@permission_required(MANAGE_PERMISSION, raise_exception=True)
 @require_POST
 def revoke_task(request: HttpRequest, site: AdminSite, task_id: str):
     current_app.control.revoke(task_id)
