@@ -26,7 +26,7 @@
         <div class="info-box__actions">
             <button class="action-btn action-btn--primary"
                     onclick="htmx.trigger(document.body, 'refresh')">↻ Refresh</button>
-            {% if redis_enabled %}
+            {% if redis_enabled and perms.celery_monitor.manage_celery_monitor %}
                 <button class="action-btn action-btn--neutral"
                         hx-post="{% url 'admin:celery_monitor_compute_stats' %}"
                         hx-swap="none"

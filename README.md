@@ -57,8 +57,58 @@ urlpatterns = [
 Start your Django development server and navigate to:
 
 ```
-http://localhost:8000/admin/celery_monitor/
+http://localhost:8000/admin/celery-monitor/
 ```
+
+## Permissions
+
+Access to the monitor is controlled by two permissions (`celery_monitor | celery monitor`):
+
+| Permission | Grants |
+|---|---|
+| `celery_monitor.view_celery_monitor` | Dashboard, task lists, task details (including args, kwargs and tracebacks), stats and queue views |
+| `celery_monitor.manage_celery_monitor` | Actions: kill/revoke tasks, clear queues, clear results and stats, compute stats, prune stale tasks |
+
+Superusers have both. Other staff users need them granted, e.g. via a group. Actions also require the
+view permission to be usable from the UI, so grant both for full access. Users without the view
+permission get a 403 and don't see the "Celery Monitor" entry in the admin sidebar, and action
+buttons are hidden for users without the manage permission.
+
+To keep the assignment the same across environments, grant it in a data migration:
+
+```python
+from django.apps import apps as global_apps
+from django.contrib.auth.management import create_permissions
+from django.db import migrations
+
+
+def grant(apps, schema_editor):
+    # Permissions are normally created after `migrate`; make sure they exist now.
+    create_permissions(
+        global_apps.get_app_config("celery_monitor"), apps=apps, verbosity=0
+    )
+    Group = apps.get_model("auth", "Group")
+    Permission = apps.get_model("auth", "Permission")
+    group, _ = Group.objects.get_or_create(name="Celery operators")
+    group.permissions.add(
+        *Permission.objects.filter(
+            content_type__app_label="celery_monitor",
+            codename__in=["view_celery_monitor", "manage_celery_monitor"],
+        )
+    )
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("auth", "0012_alter_user_first_name_max_length"),
+        ("celery_monitor", "0003_celerymonitor"),
+    ]
+
+    operations = [migrations.RunPython(grant, migrations.RunPython.noop)]
+```
+
+> **Upgrading to 0.6.0:** before 0.6.0 every staff user had full access to the monitor. Since 0.6.0
+> staff users without these permissions get a 403 until the permissions are granted.
 
 ## Backend Options
 
@@ -160,7 +210,7 @@ The task is incremental by default — it only processes tasks added since the l
 Pass `overwrite=True` to recompute everything from scratch:
 
 ```python
-from celery_monitor.tasks import calculate_celery_stats
+from celery_monitor.redis.tasks import calculate_celery_stats
 
 calculate_celery_stats.delay(overwrite=True)
 ```

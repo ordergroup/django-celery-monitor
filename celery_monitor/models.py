@@ -17,6 +17,22 @@ class CeleryStatusCount(models.Model):
         return f"{self.status}: {self.count}"
 
 
+class CeleryMonitor(models.Model):
+    """Permission holder only; unmanaged, has no table."""
+
+    class Meta:
+        managed = False
+        default_permissions = ()
+        verbose_name = "celery monitor"
+        permissions = (
+            ("view_celery_monitor", "Can view Celery Monitor"),
+            ("manage_celery_monitor", "Can manage Celery tasks and queues"),
+        )
+
+    def __str__(self) -> str:
+        return "Celery Monitor"
+
+
 @dataclass()
 class QueueStats:
     queue_name: str

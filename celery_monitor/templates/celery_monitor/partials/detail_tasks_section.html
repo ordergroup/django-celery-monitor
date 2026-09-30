@@ -75,7 +75,7 @@ document.getElementById('task-filters-form').addEventListener('change', function
             <th>Started</th>
             <th>Completed</th>
             <th>Execution Time</th>
-            <th>Actions</th>
+            {% if perms.celery_monitor.manage_celery_monitor %}<th>Actions</th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -92,24 +92,27 @@ document.getElementById('task-filters-form').addEventListener('change', function
                 <td>{{ task.date_started|default:"-" }}</td>
                 <td>{{ task.date_done|default:"-" }}</td>
                 <td>{{ task.execution_time|format_duration }}</td>
-                <td class="task-actions">
-                    {% if task.status == "STARTED" or task.status == "PROGRESS" %}
-                        <button class="kill-btn kill-btn--term"
-                                hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-confirm="Send SIGTERM to task {{ task.task_id }}?"
-                                hx-swap="none">SIGTERM</button>
-                        <button class="kill-btn kill-btn--kill"
-                                hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}?sigkill"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-confirm="Send SIGKILL to task {{ task.task_id }}?"
-                                hx-swap="none">SIGKILL</button>
-                    {% endif %}
-                </td>
+                {% if perms.celery_monitor.manage_celery_monitor %}
+                    <td class="task-actions">
+                        {% if task.status == "STARTED" or task.status == "PROGRESS" %}
+                            <button class="kill-btn kill-btn--term"
+                                    hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-confirm="Send SIGTERM to task {{ task.task_id }}?"
+                                    hx-swap="none">SIGTERM</button>
+                            <button class="kill-btn kill-btn--kill"
+                                    hx-post="{% url 'admin:celery_monitor_task_kill' task.task_id %}?sigkill"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-confirm="Send SIGKILL to task {{ task.task_id }}?"
+                                    hx-swap="none">SIGKILL</button>
+                        {% endif %}
+                    </td>
+                {% endif %}
             </tr>
         {% empty %}
             <tr>
-                <td colspan="8" class="empty-row">No tasks found.</td>
+                <td colspan="{% if perms.celery_monitor.manage_celery_monitor %}8{% else %}7{% endif %}"
+                    class="empty-row">No tasks found.</td>
             </tr>
         {% endfor %}
     </tbody>
