@@ -41,7 +41,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # needed for coverage report on master
       pull-requests: write
 
     steps:
